@@ -36,6 +36,12 @@ Q. 2D에는 threshold가 없고 3D에는 threshold가 있는 이유는 무엇인
 
 A. 기존 2D 구현은 높이장이므로 threshold가 없었다. Marching Squares와 Marching Cubes는 스칼라장의 `d == threshold`를 추출하므로 threshold가 필요하다.
 
+## Contour Plot
+
+Q. Matplotlib이나 MATLAB의 등고선 그림은 무엇을 하는가?
+
+A. 격자에 샘플링된 값 `Z[i, j]`에 대해 여러 contour level을 정하고, 각 level마다 Marching Squares 계열 처리로 `Z == level` 선을 뽑는다. 즉 하나의 샘플 분포에 여러 threshold를 적용해 등고선을 반복 추출한 것이다.
+
 ## Slice
 
 Q. 3D의 `slice`는 threshold와 같은가?
