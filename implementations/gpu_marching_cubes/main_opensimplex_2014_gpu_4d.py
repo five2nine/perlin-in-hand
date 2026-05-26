@@ -92,7 +92,7 @@ class OpenSimplexNoise4DApp(mglw.WindowConfig):
         self.resolution = 2 ** 6  # Voxel Grid size: resolution^3
         self.frequency = 6.0  # Lower frequency for larger, more visible cheese holes
         self.threshold = 0.05 * 6  # Anything below this threshold in noise is a hole
-        self.slice_val = 0.0  # 4D Slice coordinate
+        self.slice_val = 0.0  # 4D W/time-axis slice coordinate
         self.palette = (
             2  # Default to Terrain (Natural colors fit cheese/soil block well)
         )
@@ -213,7 +213,7 @@ class OpenSimplexNoise4DApp(mglw.WindowConfig):
         print("  W                : Toggle Wireframe Mode")
         print("  R                : Reset Camera Position")
         print("  UP / DOWN        : Change Voxel Grid Size (Resolution +/- 8, Max 256)")
-        print("  LEFT / RIGHT     : Adjust 4D Slice Coordinate (+/- 0.05)")
+        print("  LEFT / RIGHT     : Adjust 4D W/Time Slice Coordinate (+/- 0.05)")
         print("  PAGE_UP / DOWN   : Adjust Density/Hole Threshold (+/- 0.05)")
         print("=" * 60)
 
@@ -350,13 +350,15 @@ class OpenSimplexNoise4DApp(mglw.WindowConfig):
             self.fps_val = self.frame_count / self.fps_timer
             self.wnd.title = (
                 f"GPU Marching Cubes Isosurface | Grid: {self.resolution}^3 | "
-                f"Threshold: {self.threshold:.2f} | Slice: {self.slice_val:.2f} | "
+                f"Threshold: {self.threshold:.2f} | "
+                f"W/Time Slice: {self.slice_val:.2f} | "
                 f"FPS: {self.fps_val:.1f}"
             )
             self.fps_timer = 0.0
             self.frame_count = 0
 
         # Update HUD label text
+        w_coord = self.slice_val + self.time_val
         self.hud_label.text = (
             f"[ GPU Marching Cubes Isosurface ]\n"
             f"Grid Size  : {self.resolution} x {self.resolution} x {self.resolution}\n"
@@ -364,7 +366,8 @@ class OpenSimplexNoise4DApp(mglw.WindowConfig):
             f"Vertices   : {self.active_voxel_count * 3:,}\n"
             f"Frequency  : {self.frequency:.1f} (Terrain Scale)\n"
             f"Threshold  : {self.threshold:.2f} (Density, PAGE_UP/DN)\n"
-            f"4D Slice   : {self.slice_val:.2f} (LEFT/RIGHT)\n"
+            f"4D W Slice : {self.slice_val:.2f} (LEFT/RIGHT)\n"
+            f"Noise W    : slice + time = {w_coord:.2f}\n"
             f"Palette    : {self.palette_names[self.palette]}\n"
             f"FPS        : {self.fps_val:.1f}"
         )
@@ -417,7 +420,7 @@ class OpenSimplexNoise4DApp(mglw.WindowConfig):
             elif key == self.wnd.keys.PAGE_DOWN:
                 self.threshold = max(-0.8, self.threshold - 0.05)
                 self.update_noise()
-            # Adjust 4D Slice coordinate and update noise buffer
+            # Adjust the 4D W/time-axis slice coordinate and update noise buffer
             elif key == self.wnd.keys.RIGHT:
                 self.slice_val += 0.05
                 self.update_noise()

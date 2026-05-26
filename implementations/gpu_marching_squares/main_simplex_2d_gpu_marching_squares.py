@@ -73,6 +73,11 @@ class SimplexMarchingSquaresApp(mglw.WindowConfig):
         self.resolution = 2**8
         self.frequency = 8.0
         self.threshold = 0.0
+        self.field_mode = 0
+        self.field_mode_names = ["Single", "fBm", "Ridged", "Billow"]
+        self.octaves = 4
+        self.persistence = 0.5
+        self.lacunarity = 2.0
         self.palette = 0
         self.palette_names = ["Lagoon", "Neon", "Topographic", "Paper"]
 
@@ -109,6 +114,10 @@ class SimplexMarchingSquaresApp(mglw.WindowConfig):
         print("  SPACE          : Pause/Resume field time coordinate")
         print("  C              : Cycle color palettes")
         print("  R              : Reset field parameters")
+        print("  M              : Cycle field mode")
+        print("  O              : Cycle octaves (1..8)")
+        print("  P              : Adjust persistence (0.30..0.85)")
+        print("  L              : Adjust lacunarity (1.5..3.0)")
         print("  UP / DOWN      : Change grid resolution (+/- 32)")
         print("  LEFT / RIGHT   : Adjust iso threshold (+/- 0.05)")
         print("  PAGE_UP / DOWN : Adjust frequency (+/- 1.0)")
@@ -137,6 +146,10 @@ class SimplexMarchingSquaresApp(mglw.WindowConfig):
         self.contour_prog["u_frequency"].value = float(self.frequency)
         self.contour_prog["u_grid_size"].value = int(self.resolution)
         self.contour_prog["u_threshold"].value = float(self.threshold)
+        self.contour_prog["u_field_mode"].value = int(self.field_mode)
+        self.contour_prog["u_octaves"].value = int(self.octaves)
+        self.contour_prog["u_persistence"].value = float(self.persistence)
+        self.contour_prog["u_lacunarity"].value = float(self.lacunarity)
 
         query = self.ctx.query(primitives=True)
         with query:
@@ -164,7 +177,11 @@ class SimplexMarchingSquaresApp(mglw.WindowConfig):
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
 
-        self.prog["u_aspect"].value = float(self.wnd.aspect_ratio)
+        viewport_width, viewport_height = self.ctx.viewport[2], self.ctx.viewport[3]
+        self.prog["u_viewport_size"].value = (
+            float(viewport_width),
+            float(viewport_height),
+        )
         self.prog["u_palette"].value = int(self.palette)
         self.prog["u_time"].value = float(self.time_val)
 
@@ -180,6 +197,7 @@ class SimplexMarchingSquaresApp(mglw.WindowConfig):
             self.fps_val = self.frame_count / self.fps_timer
             self.wnd.title = (
                 f"GPU Marching Squares | Grid: {self.resolution}x{self.resolution} | "
+                f"Mode: {self.field_mode_names[self.field_mode]} | "
                 f"Segments: {self.active_segment_count:,} | "
                 f"Threshold: {self.threshold:.2f} | FPS: {self.fps_val:.1f}"
             )
@@ -190,8 +208,12 @@ class SimplexMarchingSquaresApp(mglw.WindowConfig):
             "[ GPU Marching Squares ]\n"
             f"Grid Size : {self.resolution} x {self.resolution}\n"
             f"Segments  : {self.active_segment_count:,}\n"
+            f"Mode      : {self.field_mode_names[self.field_mode]}\n"
+            f"Octaves   : {self.octaves}\n"
             f"Frequency : {self.frequency:.1f}\n"
             f"Threshold : {self.threshold:.2f}\n"
+            f"Persist.  : {self.persistence:.2f}\n"
+            f"Lacunarity: {self.lacunarity:.1f}\n"
             f"Palette   : {self.palette_names[self.palette]}\n"
             f"FPS       : {self.fps_val:.1f}"
         )
@@ -216,7 +238,25 @@ class SimplexMarchingSquaresApp(mglw.WindowConfig):
         elif key == self.wnd.keys.R:
             self.frequency = 8.0
             self.threshold = 0.0
+            self.field_mode = 0
+            self.octaves = 4
+            self.persistence = 0.5
+            self.lacunarity = 2.0
             self.time_val = 0.0
+            self.update_contours()
+        elif key == self.wnd.keys.M:
+            self.field_mode = (self.field_mode + 1) % len(self.field_mode_names)
+            self.update_contours()
+        elif key == self.wnd.keys.O:
+            self.octaves = 1 if self.octaves >= 8 else self.octaves + 1
+            self.update_contours()
+        elif key == self.wnd.keys.P:
+            self.persistence = 0.3 if self.persistence >= 0.85 else self.persistence + 0.05
+            self.persistence = round(self.persistence, 2)
+            self.update_contours()
+        elif key == self.wnd.keys.L:
+            self.lacunarity = 1.5 if self.lacunarity >= 3.0 else self.lacunarity + 0.1
+            self.lacunarity = round(self.lacunarity, 1)
             self.update_contours()
         elif key == self.wnd.keys.UP:
             self.resolution = min(1024, self.resolution + 32)

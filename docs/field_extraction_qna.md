@@ -40,7 +40,7 @@ A. 기존 2D 구현은 높이장이므로 threshold가 없었다. Marching Squar
 
 Q. 3D의 `slice`는 threshold와 같은가?
 
-A. 아니다. threshold는 등밀도 값을 고른다. slice는 extra noise coordinate를 고정한다. 현재 Marching Cubes 코드의 `slice`는 4D noise의 `w` 좌표이며, 코드상 `w = slice + time`이다.
+A. 아니다. threshold는 등밀도 값을 고른다. slice는 extra noise coordinate를 고정한다. 현재 Marching Cubes 코드의 `slice`는 4D noise의 `w` 축 좌표이며, 시간 애니메이션과 합쳐져 코드상 `w = slice + time`으로 들어간다.
 
 ## `snoise`
 

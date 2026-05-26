@@ -31,7 +31,7 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * [shaders/opensimplex_2014.vert](implementations/gpu_heightfield/shaders/opensimplex_2014.vert): OpenSimplex2 높이장 버텍스 셰이더입니다.
 
 ### 4. GPU Marching Squares 구현
-* [main_simplex_2d_gpu_marching_squares.py](implementations/gpu_marching_squares/main_simplex_2d_gpu_marching_squares.py): 2D simplex 밀도장 `d = func(x, y, t)`에서 Marching Squares로 등고선 선분을 추출합니다.
+* [main_simplex_2d_gpu_marching_squares.py](implementations/gpu_marching_squares/main_simplex_2d_gpu_marching_squares.py): 2D simplex 밀도장 `d = func(x, y, t)`에서 Marching Squares로 등고선 선분을 추출하고, 공통 파라미터 기반 필드 모드(Single/fBm/Ridged/Billow)를 전환합니다.
 * [shaders/marching_squares_tf.geom](implementations/gpu_marching_squares/shaders/marching_squares_tf.geom): transform feedback로 등고선 선분을 생성하는 geometry shader입니다.
 
 ### 5. GPU Marching Cubes 구현
@@ -48,6 +48,7 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * [noise_complexity_comparison.md](docs/noise_complexity_comparison.md): 펄린 노이즈와 심플렉스 노이즈의 차원별 연산 절차 및 수학적 복잡도 분석 문서입니다.
 * [terrain_synthesis_methods.md](docs/terrain_synthesis_methods.md): 단순 노이즈를 사실적인 산맥, 평야, 협곡 등으로 결합 및 가공하는 지형 합성 이론 가이드입니다.
 * [field_extraction_qna.md](docs/field_extraction_qna.md): 높이장, 등가집합, threshold, slice, 셰이더 variant 관련 짧은 Q&A입니다.
+* [noise_field_interpretation.md](docs/noise_field_interpretation.md): Simplex noise의 dot product, FEM 보간, score field 해석 메모입니다.
 
 ---
 
@@ -85,5 +86,5 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 | **W** | 와이어프레임(Grid 라인) 모드 ↔️ 솔리드 면 모드 토글 |
 | **R** | 카메라 줌 및 각도 기본값 초기화 |
 | **방향키 위(▲) / 아래(▼)** | 격자 해상도 조절 [3D 지형: Resolution +/- 10, 최댓값 400] / 복셀 해상도 조절 [4D 치즈: Resolution +/- 8, 범위 8~256] |
-| **방향키 좌(◀) / 우(▶)** | 4D 슬라이스 좌표(Slice) 조절 (Slice +/- 0.05) [4D 버전 전용] |
+| **방향키 좌(◀) / 우(▶)** | 4D W/시간축 슬라이스 좌표 조절 (Slice +/- 0.05) [4D 버전 전용] |
 | **PAGE_UP / PAGE_DOWN** | 파도 진폭 높이 조절 [3D 지형: +/- 0.01] / 복셀 밀도 임계값 조절 [4D 치즈: +/- 0.05, 범위 -0.8~0.8] |

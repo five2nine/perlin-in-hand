@@ -9,9 +9,15 @@ uniform float u_time;
 uniform float u_frequency;
 uniform int u_grid_size;
 uniform float u_threshold;
+uniform int u_field_mode;
+uniform int u_octaves;
+uniform float u_persistence;
+uniform float u_lacunarity;
 
 out vec2 out_pos;
 out float out_value;
+
+const int MAX_OCTAVES = 8;
 
 // Ashima Arts / Stefan Gustavson 3D simplex noise.
 // snoise is the conventional short name for simplex noise.
@@ -102,8 +108,77 @@ float snoise(vec3 v) {
     );
 }
 
+float sample_base_noise(vec2 grid_pos, float frequency) {
+    return snoise(vec3(grid_pos * frequency, u_time));
+}
+
+float sample_fbm(vec2 grid_pos) {
+    float total = 0.0;
+    float amplitude = 1.0;
+    float frequency = u_frequency;
+    float amplitude_sum = 0.0;
+
+    for (int i = 0; i < MAX_OCTAVES; i++) {
+        if (i >= u_octaves) break;
+        total += sample_base_noise(grid_pos, frequency) * amplitude;
+        amplitude_sum += amplitude;
+        frequency *= u_lacunarity;
+        amplitude *= u_persistence;
+    }
+
+    if (amplitude_sum <= 0.0) return 0.0;
+    return total / amplitude_sum;
+}
+
+float sample_ridged(vec2 grid_pos) {
+    float total = 0.0;
+    float amplitude = 1.0;
+    float frequency = u_frequency;
+    float amplitude_sum = 0.0;
+
+    for (int i = 0; i < MAX_OCTAVES; i++) {
+        if (i >= u_octaves) break;
+        float n = sample_base_noise(grid_pos, frequency);
+        total += (1.0 - abs(n)) * amplitude;
+        amplitude_sum += amplitude;
+        frequency *= u_lacunarity;
+        amplitude *= u_persistence;
+    }
+
+    if (amplitude_sum <= 0.0) return 0.0;
+    return (total / amplitude_sum) * 2.0 - 1.0;
+}
+
+float sample_billow(vec2 grid_pos) {
+    float total = 0.0;
+    float amplitude = 1.0;
+    float frequency = u_frequency;
+    float amplitude_sum = 0.0;
+
+    for (int i = 0; i < MAX_OCTAVES; i++) {
+        if (i >= u_octaves) break;
+        float n = sample_base_noise(grid_pos, frequency);
+        total += abs(n) * amplitude;
+        amplitude_sum += amplitude;
+        frequency *= u_lacunarity;
+        amplitude *= u_persistence;
+    }
+
+    if (amplitude_sum <= 0.0) return 0.0;
+    return (total / amplitude_sum) * 2.0 - 1.0;
+}
+
 float get_density(vec2 grid_pos) {
-    return snoise(vec3(grid_pos * u_frequency, u_time));
+    if (u_field_mode == 1) {
+        return sample_fbm(grid_pos);
+    }
+    if (u_field_mode == 2) {
+        return sample_ridged(grid_pos);
+    }
+    if (u_field_mode == 3) {
+        return sample_billow(grid_pos);
+    }
+    return sample_base_noise(grid_pos, u_frequency);
 }
 
 vec2 interp(vec2 pA, vec2 pB, float dA, float dB) {
