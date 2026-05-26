@@ -89,7 +89,7 @@ class OpenSimplexNoise4DApp(mglw.WindowConfig):
         self.camera.zoom_sensitivity = 0.05
 
         # Voxel & Noise configuration
-        self.resolution = 2 ** 8  # Voxel Grid size: resolution^3
+        self.resolution = 2 ** 6  # Voxel Grid size: resolution^3
         self.frequency = 6.0  # Lower frequency for larger, more visible cheese holes
         self.threshold = 0.05 * 6  # Anything below this threshold in noise is a hole
         self.slice_val = 0.0  # 4D Slice coordinate

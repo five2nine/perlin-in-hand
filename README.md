@@ -30,19 +30,24 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * [shaders/perlin_2002.vert](implementations/gpu_heightfield/shaders/perlin_2002.vert): Perlin 높이장 버텍스 셰이더입니다.
 * [shaders/opensimplex_2014.vert](implementations/gpu_heightfield/shaders/opensimplex_2014.vert): OpenSimplex2 높이장 버텍스 셰이더입니다.
 
-### 4. GPU Marching Cubes 구현
+### 4. GPU Marching Squares 구현
+* [main_simplex_2d_gpu_marching_squares.py](implementations/gpu_marching_squares/main_simplex_2d_gpu_marching_squares.py): 2D simplex 밀도장 `d = func(x, y, t)`에서 Marching Squares로 등고선 선분을 추출합니다.
+* [shaders/marching_squares_tf.geom](implementations/gpu_marching_squares/shaders/marching_squares_tf.geom): transform feedback로 등고선 선분을 생성하는 geometry shader입니다.
+
+### 5. GPU Marching Cubes 구현
 * [main_opensimplex_2014_gpu_4d.py](implementations/gpu_marching_cubes/main_opensimplex_2014_gpu_4d.py): 4D simplex 밀도장 `d = func(x, y, z, t)`에서 Marching Cubes로 3D 등가면을 추출합니다.
 * [marching_cubes_table.py](implementations/gpu_marching_cubes/marching_cubes_table.py): Marching Cubes 삼각화 테이블입니다.
 * [shaders/marching_cubes_tf.geom](implementations/gpu_marching_cubes/shaders/marching_cubes_tf.geom): transform feedback로 등가면 삼각형을 생성하는 geometry shader입니다.
 
-### 5. 기타 구현 자료
+### 6. 기타 구현 자료
 * [gpu_voxel_instancing_legacy](implementations/gpu_voxel_instancing_legacy): Marching Cubes 이전의 복셀 인스턴싱 방식 셰이더 보관 폴더입니다.
 * [gpu_smoke_test/test_render.py](implementations/gpu_smoke_test/test_render.py): ModernGL 기본 렌더링 확인용 삼각형 테스트입니다.
 
-### 6. 기술 문서
+### 7. 기술 문서
 * [gui_architecture_qa.md](docs/gui_architecture_qa.md): 최적화(FPS, dt) 및 전문 GUI 연동 아키텍처 기술 Q&A 백서입니다.
 * [noise_complexity_comparison.md](docs/noise_complexity_comparison.md): 펄린 노이즈와 심플렉스 노이즈의 차원별 연산 절차 및 수학적 복잡도 분석 문서입니다.
 * [terrain_synthesis_methods.md](docs/terrain_synthesis_methods.md): 단순 노이즈를 사실적인 산맥, 평야, 협곡 등으로 결합 및 가공하는 지형 합성 이론 가이드입니다.
+* [field_extraction_qna.md](docs/field_extraction_qna.md): 높이장, 등가집합, threshold, slice, 셰이더 variant 관련 짧은 Q&A입니다.
 
 ---
 
@@ -62,6 +67,9 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 #### 오픈심플렉스 노이즈 (2014) 실행:
 * **CPU 버전**: `uv run .\implementations\cpu_heightfield\main_opensimplex_2014_cpu.py` (또는 `python .\implementations\cpu_heightfield\main_opensimplex_2014_cpu.py`)
 * **GPU 높이장 버전**: `uv run .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py` (또는 `python .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py`)
+
+#### 등가집합 추출 실행:
+* **GPU Marching Squares 버전**: `uv run .\implementations\gpu_marching_squares\main_simplex_2d_gpu_marching_squares.py` (또는 `python .\implementations\gpu_marching_squares\main_simplex_2d_gpu_marching_squares.py`)
 * **GPU Marching Cubes 버전**: `uv run .\implementations\gpu_marching_cubes\main_opensimplex_2014_gpu_4d.py` (또는 `python .\implementations\gpu_marching_cubes\main_opensimplex_2014_gpu_4d.py`)
 
 ---
