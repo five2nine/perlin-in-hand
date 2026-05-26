@@ -108,18 +108,20 @@ class TerrainStack:
         octaves: int | None = None,
     ) -> int:
         rng = rng or random.Random()
-        kind = force_kind or rng.choice(
-            [
-                LayerKind.SIMPLE,
-                LayerKind.FBM,
-                LayerKind.RIDGED,
-                LayerKind.BILLOW,
-                LayerKind.VALLEY,
-                LayerKind.WARPED,
-            ]
-        )
+        if force_kind is None:
+            kind = rng.choice(
+                [
+                    LayerKind.SIMPLE,
+                    LayerKind.RIDGED,
+                    LayerKind.BILLOW,
+                    LayerKind.VALLEY,
+                    LayerKind.WARPED,
+                ]
+            )
+        else:
+            kind = force_kind
         kind = LayerKind(kind)
-        selected_octaves = 1 if kind == LayerKind.SIMPLE else rng.randint(1, MAX_OCTAVES)
+        selected_octaves = rng.randint(1, MAX_OCTAVES)
         if octaves is not None:
             selected_octaves = octaves
 
@@ -338,7 +340,10 @@ def sample_layer(layer: TerrainLayer, x: np.ndarray, y: np.ndarray) -> np.ndarra
         ry = ry + wy * layer.warp_strength
 
     if layer.kind == LayerKind.SIMPLE:
-        value = _sample_base(layer, rx, ry, layer.frequency, 0.0)
+        if layer.octaves <= 1:
+            value = _sample_base(layer, rx, ry, layer.frequency, 0.0)
+        else:
+            value = _sample_fbm(layer, rx, ry)
     elif layer.kind in (LayerKind.FBM, LayerKind.WARPED):
         value = _sample_fbm(layer, rx, ry)
     elif layer.kind == LayerKind.RIDGED:

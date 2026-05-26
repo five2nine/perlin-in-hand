@@ -106,7 +106,11 @@ float sample_layer(int index, vec2 uv) {
 
     float value = 0.0;
     if (kind == 0) {
-        value = sample_base(index, tuv, p0.x, 0.0);
+        if (u_layer_octaves[index] <= 1) {
+            value = sample_base(index, tuv, p0.x, 0.0);
+        } else {
+            value = sample_fbm(index, tuv);
+        }
     } else if (kind == 1 || kind == 5) {
         value = sample_fbm(index, tuv);
     } else if (kind == 2) {

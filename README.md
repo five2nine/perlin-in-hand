@@ -7,6 +7,7 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 ## 🌟 주요 특징 (Features)
 
 * **GPU 가속 지형 생성**: GLSL 버텍스 셰이더 내부에서 Stefan Gustavson의 Classic 3D Noise 알고리즘을 수행하여 정교한 파도와 지형을 고속 렌더링합니다.
+* **ImGui 지형 제어 패널**: 정적 지형 생성 유틸리티는 레이어 추가/삭제, 선택 레이어 편집, 해상도/팔레트 변경을 위젯 패널에서 조작합니다.
 * **실시간 법선 벡터(Normal) 계산**: 유한차분법(Finite Difference)을 셰이더 내에서 활용하여 노이즈 높이에 따른 정확한 음영(Lighting)과 입체감을 표현합니다.
 * **최적화된 프레임 제한**: VSync 비활성화 환경에서도 GPU 과부하(3500+ FPS)를 방지하기 위해 프로그램 자체에서 **60 FPS 프레임 캡(Capping)**을 지원합니다. (GPU 사용량을 50%+에서 1~2%로 절약)
 * **카메라 극점 반전 예외 처리**: 창 최대화 혹은 빠른 화면 드래그 시 카메라 축이 180도 돌아가 뒤집히는 물리 특이점(lookAt Singularity) 문제를 방지하는 필터가 적용되어 있습니다.
@@ -31,9 +32,10 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * [shaders/opensimplex_2014.vert](implementations/gpu_heightfield/shaders/opensimplex_2014.vert): OpenSimplex2 높이장 버텍스 셰이더입니다.
 
 ### 4. 정적 지형 생성 유틸리티
-* [main_gpu_terrain_generator.py](implementations/gpu_terrain_generation/main_gpu_terrain_generator.py): Marching Squares가 아닌 하이트필드 방식의 정적 `height = f(x, y)` 지형 생성기입니다. 1/2/3 옥타브 필드, Ridged, Billow, Valley, Warped 레이어를 GPU에서 한 번 구워 정적 VBO로 누적하고 HUD/키보드 UI로 레이어를 추가·삭제합니다.
-* [main_cpu_terrain_generator.py](implementations/cpu_terrain_generation/main_cpu_terrain_generator.py): GPU 버전과 같은 3D 창, 같은 키보드 인터페이스, 같은 셰이더 출력물을 사용하되, 높이/노멀 VBO를 CPU에서 한 번 계산해 업로드하는 유틸리티입니다.
+* [main_gpu_terrain_generator.py](implementations/gpu_terrain_generation/main_gpu_terrain_generator.py): Marching Squares가 아닌 하이트필드 방식의 정적 `height = f(x, y)` 지형 생성기입니다. Random, Simple 1/2/3 Oct, Ridged, Billow, Valley, Warped 레이어를 더하고, GPU에서 한 번 구워 정적 VBO로 누적하며 ImGui/키보드 UI로 레이어를 추가·삭제합니다.
+* [main_cpu_terrain_generator.py](implementations/cpu_terrain_generation/main_cpu_terrain_generator.py): GPU 버전과 같은 3D 창, 같은 ImGui/키보드 인터페이스, 같은 셰이더 출력물을 사용하되, 높이/노멀 VBO를 CPU에서 한 번 계산해 업로드하는 유틸리티입니다.
 * [terrain_layers.py](implementations/terrain_generation_common/terrain_layers.py): GPU/CPU가 공유하는 지형 레이어 정의, 랜덤 레이어 생성, CPU 샘플러입니다.
+* [terrain_imgui.py](implementations/terrain_generation_common/terrain_imgui.py): GPU/CPU 지형 생성기가 함께 사용하는 ImGui 위젯 패널입니다.
 
 ### 5. GPU Marching Squares 구현
 * [main_simplex_2d_gpu_marching_squares.py](implementations/gpu_marching_squares/main_simplex_2d_gpu_marching_squares.py): 2D simplex 밀도장 `d = func(x, y, t)`에서 Marching Squares로 등고선 선분을 추출하고, 공통 파라미터 기반 필드 모드(Single/fBm/Ridged/Billow)를 전환합니다.
@@ -50,6 +52,7 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 
 ### 8. 기술 문서
 * [gui_architecture_qa.md](docs/gui_architecture_qa.md): 최적화(FPS, dt) 및 전문 GUI 연동 아키텍처 기술 Q&A 백서입니다.
+* [terrain_imgui_widget.md](docs/terrain_imgui_widget.md): 정적 지형 생성 유틸리티의 ImGui 위젯 패널 구현 기록입니다.
 * [noise_complexity_comparison.md](docs/noise_complexity_comparison.md): 펄린 노이즈와 심플렉스 노이즈의 차원별 연산 절차 및 수학적 복잡도 분석 문서입니다.
 * [terrain_synthesis_methods.md](docs/terrain_synthesis_methods.md): 단순 노이즈를 사실적인 산맥, 평야, 협곡 등으로 결합 및 가공하는 지형 합성 이론 가이드입니다.
 * [field_extraction_qna.md](docs/field_extraction_qna.md): 높이장, 등가집합, threshold, slice, 셰이더 variant 관련 짧은 Q&A입니다.
@@ -60,7 +63,7 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 ## 🛠️ 설치 및 실행 방법 (Installation & Usage)
 
 ### 요구사항
-* Python 3.13 이상
+* Python 3.12.x
 * `uv` 패키지 매니저 (추천) 또는 `pip`
 
 ### 실행 명령어
@@ -101,10 +104,11 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 ### 정적 지형 생성 유틸리티 조작
 
 GPU/CPU 레이어 UI 버전은 같은 조작을 사용합니다.
+창 좌측의 ImGui 패널에서도 같은 기능을 버튼, 체크박스, 콤보박스, 슬라이더로 조작할 수 있습니다.
 
 | 조작 키 / 마우스 | 기능 설명 |
 | :--- | :--- |
-| **1 / 2 / 3** | 1/2/3 옥타브 fBm 레이어를 랜덤 파라미터로 추가 |
+| **1 / 2 / 3** | 1/2/3 옥타브 Simple 레이어를 랜덤 파라미터로 추가 |
 | **A** | 랜덤 지형 레이어 추가 |
 | **V / B / G / W** | Valley / Billow / Ridged / Warped 레이어 추가 |
 | **TAB** | 선택 레이어 변경 |

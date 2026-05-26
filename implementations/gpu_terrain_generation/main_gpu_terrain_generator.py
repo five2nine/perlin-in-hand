@@ -10,23 +10,7 @@ import time
 import moderngl
 import moderngl_window as mglw
 import numpy as np
-import pyglet
 from moderngl_window.scene import OrbitCamera
-from pyglet.gl import (
-    GL_BLEND,
-    GL_DEPTH_TEST,
-    GL_ONE_MINUS_SRC_ALPHA,
-    GL_SRC_ALPHA,
-    GL_TEXTURE0,
-    GL_TEXTURE_2D,
-    glActiveTexture,
-    glBindTexture,
-    glBindVertexArray,
-    glBlendFunc,
-    glDisable,
-    glEnable,
-    glUseProgram,
-)
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -38,6 +22,7 @@ from terrain_layers import (  # noqa: E402
     LayerKind,
     TerrainStack,
 )
+from terrain_imgui import TerrainImguiPanel  # noqa: E402
 
 
 with open(
@@ -65,7 +50,8 @@ with open(
 class GPUTerrainGeneratorApp(mglw.WindowConfig):
     gl_version = (3, 3)
     title = "GPU Terrain Heightfield Generator"
-    window_size = (1280, 720)
+    window_size = (1920, 1080)
+    aspect_ratio = None
     resizable = True
     vsync = True
 
@@ -98,6 +84,7 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
         self.rng = random.Random(6789)
         self.stack = TerrainStack.default()
         self.selected_layer = 0
+        self.last_build_ms = 0.0
 
         self.model_matrix = np.eye(4, dtype="f4")
         self.model_matrix_bytes = self.model_matrix.tobytes()
@@ -116,22 +103,18 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
         self.target_fps = 60
         self.fps_val = 0.0
 
-        self.hud_label = pyglet.text.Label(
-            "",
-            font_name="Consolas",
-            font_size=12,
-            x=18,
-            y=self.wnd.height - 18,
-            width=680,
-            multiline=True,
-            color=(255, 255, 255, 225),
+        self.ui = TerrainImguiPanel(
+            self.wnd,
+            "GPU",
+            self.palette_names,
+            get_build_ms=lambda: self.last_build_ms,
         )
 
         print("=" * 72)
         print("GPU Terrain Heightfield Generator (static f(x, y))")
         print("-" * 72)
         print("Controls:")
-        print("  1 / 2 / 3      : Add random field layer with 1/2/3 octaves")
+        print("  1 / 2 / 3      : Add Simple field layer with 1/2/3 octaves")
         print("  A              : Add random terrain layer")
         print("  V / B / G / W  : Add Valley / Billow / Ridged / Warped layer")
         print("  TAB            : Select next layer")
@@ -250,10 +233,12 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
     def bake_terrain(self) -> None:
         if self.bake_vao is None or self.terrain_vbo is None:
             return
+        start = time.perf_counter()
         self.bake_vao.transform(
             self.terrain_vbo,
             vertices=self.resolution * self.resolution,
         )
+        self.last_build_ms = (time.perf_counter() - start) * 1000.0
 
     def add_random_layer(
         self,
@@ -268,7 +253,18 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
         self.upload_terrain_stack()
 
     def remove_selected_layer(self) -> None:
-        self.selected_layer = self.stack.remove_layer(self.selected_layer)
+        self.remove_layer(self.selected_layer)
+
+    def remove_layer(self, index: int) -> None:
+        self.selected_layer = self.stack.remove_layer(index)
+        self.upload_terrain_stack()
+
+    def set_layer_enabled(self, index: int, enabled: bool) -> None:
+        if not self.stack.layers:
+            return
+        index = self.stack.clamp_index(index)
+        self.stack.layers[index].enabled = enabled
+        self.selected_layer = index
         self.upload_terrain_stack()
 
     def selected(self):
@@ -281,35 +277,6 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
         self.camera.radius = 1.55
         self.camera.angle_x = 45.0
         self.camera.angle_y = -45.0
-
-    def draw_hud(self) -> None:
-        layer_lines: list[str] = []
-        for idx, layer in enumerate(self.stack.layers[:8]):
-            cursor = ">" if idx == self.selected_layer else " "
-            layer_lines.append(f"{cursor}{idx:02d} {layer.summary()}")
-        if len(self.stack.layers) > 8:
-            layer_lines.append(f" ... {len(self.stack.layers) - 8} more")
-        if not layer_lines:
-            layer_lines.append(" no terrain layers")
-
-        self.hud_label.text = (
-            "[ GPU Terrain Heightfield ]\n"
-            f"Grid      : {self.resolution} x {self.resolution}\n"
-            f"Layers    : {len(self.stack.layers)} / 16\n"
-            f"Palette   : {self.palette_names[self.palette]}\n"
-            f"FPS       : {self.fps_val:.1f}\n"
-            "Controls  : A random, 1/2/3 octaves, V valley, W warp, DEL remove\n"
-            + "\n".join(layer_lines)
-        )
-
-        glUseProgram(0)
-        glBindVertexArray(0)
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D, 0)
-        glDisable(GL_DEPTH_TEST)
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        self.hud_label.draw()
 
     def on_render(self, time_since_start: float, frametime: float):
         now = time.perf_counter()
@@ -353,20 +320,21 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
             self.fps_timer = 0.0
             self.frame_count = 0
 
-        self.draw_hud()
+        self.ui.render(self)
 
     def on_key_event(self, key, action, modifiers):
+        self.ui.key_event(key, action, modifiers)
         if action != self.wnd.keys.ACTION_PRESS:
             return
 
         if key == self.wnd.keys.A:
             self.add_random_layer()
         elif key == self.wnd.keys.NUMBER_1:
-            self.add_random_layer(force_kind=LayerKind.FBM, octaves=1)
+            self.add_random_layer(force_kind=LayerKind.SIMPLE, octaves=1)
         elif key == self.wnd.keys.NUMBER_2:
-            self.add_random_layer(force_kind=LayerKind.FBM, octaves=2)
+            self.add_random_layer(force_kind=LayerKind.SIMPLE, octaves=2)
         elif key == self.wnd.keys.NUMBER_3:
-            self.add_random_layer(force_kind=LayerKind.FBM, octaves=3)
+            self.add_random_layer(force_kind=LayerKind.SIMPLE, octaves=3)
         elif key == self.wnd.keys.V:
             self.add_random_layer(force_kind=LayerKind.VALLEY)
         elif key == self.wnd.keys.B:
@@ -421,6 +389,9 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
                 self.upload_terrain_stack()
 
     def on_mouse_drag_event(self, x, y, dx, dy):
+        self.ui.mouse_drag_event(x, y, dx, dy)
+        if self.ui.wants_mouse:
+            return
         if abs(dx) > 100 or abs(dy) > 100:
             return
         self.camera.angle_x += dx * self.camera.mouse_sensitivity / 10.0
@@ -428,14 +399,33 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
         self.camera.angle_y = max(min(self.camera.angle_y, -10.0), -170.0)
 
     def on_mouse_scroll_event(self, x_offset, y_offset):
+        self.ui.mouse_scroll_event(x_offset, y_offset)
+        if self.ui.wants_mouse:
+            return
         self.camera.radius = max(0.1, self.camera.radius - y_offset * self.camera.zoom_sensitivity)
+
+    def on_mouse_position_event(self, x, y, dx, dy):
+        self.ui.mouse_position_event(x, y, dx, dy)
+
+    def on_mouse_press_event(self, x, y, button):
+        self.ui.mouse_press_event(x, y, button)
+
+    def on_mouse_release_event(self, x, y, button):
+        self.ui.mouse_release_event(x, y, button)
+
+    def on_unicode_char_entered(self, char):
+        self.ui.unicode_char_entered(char)
 
     def on_resize(self, width: int, height: int):
         self.ctx.viewport = (0, 0, width, height)
         aspect = width / height if height > 0 else 1.0
         self.camera.projection.update(aspect_ratio=aspect)
-        if hasattr(self, "hud_label") and self.hud_label:
-            self.hud_label.y = height - 18
+        if hasattr(self, "ui"):
+            self.ui.resize(width, height)
+
+    def on_close(self):
+        if hasattr(self, "ui"):
+            self.ui.shutdown()
 
 
 def main() -> None:
