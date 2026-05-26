@@ -30,20 +30,25 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * [shaders/perlin_2002.vert](implementations/gpu_heightfield/shaders/perlin_2002.vert): Perlin 높이장 버텍스 셰이더입니다.
 * [shaders/opensimplex_2014.vert](implementations/gpu_heightfield/shaders/opensimplex_2014.vert): OpenSimplex2 높이장 버텍스 셰이더입니다.
 
-### 4. GPU Marching Squares 구현
+### 4. 정적 지형 생성 유틸리티
+* [main_gpu_terrain_generator.py](implementations/gpu_terrain_generation/main_gpu_terrain_generator.py): Marching Squares가 아닌 하이트필드 방식의 정적 `height = f(x, y)` 지형 생성기입니다. 1/2/3 옥타브 필드, Ridged, Billow, Valley, Warped 레이어를 GPU에서 한 번 구워 정적 VBO로 누적하고 HUD/키보드 UI로 레이어를 추가·삭제합니다.
+* [main_cpu_terrain_generator.py](implementations/cpu_terrain_generation/main_cpu_terrain_generator.py): GPU 버전과 같은 3D 창, 같은 키보드 인터페이스, 같은 셰이더 출력물을 사용하되, 높이/노멀 VBO를 CPU에서 한 번 계산해 업로드하는 유틸리티입니다.
+* [terrain_layers.py](implementations/terrain_generation_common/terrain_layers.py): GPU/CPU가 공유하는 지형 레이어 정의, 랜덤 레이어 생성, CPU 샘플러입니다.
+
+### 5. GPU Marching Squares 구현
 * [main_simplex_2d_gpu_marching_squares.py](implementations/gpu_marching_squares/main_simplex_2d_gpu_marching_squares.py): 2D simplex 밀도장 `d = func(x, y, t)`에서 Marching Squares로 등고선 선분을 추출하고, 공통 파라미터 기반 필드 모드(Single/fBm/Ridged/Billow)를 전환합니다.
 * [shaders/marching_squares_tf.geom](implementations/gpu_marching_squares/shaders/marching_squares_tf.geom): transform feedback로 등고선 선분을 생성하는 geometry shader입니다.
 
-### 5. GPU Marching Cubes 구현
+### 6. GPU Marching Cubes 구현
 * [main_opensimplex_2014_gpu_4d.py](implementations/gpu_marching_cubes/main_opensimplex_2014_gpu_4d.py): 4D simplex 밀도장 `d = func(x, y, z, t)`에서 Marching Cubes로 3D 등가면을 추출합니다.
 * [marching_cubes_table.py](implementations/gpu_marching_cubes/marching_cubes_table.py): Marching Cubes 삼각화 테이블입니다.
 * [shaders/marching_cubes_tf.geom](implementations/gpu_marching_cubes/shaders/marching_cubes_tf.geom): transform feedback로 등가면 삼각형을 생성하는 geometry shader입니다.
 
-### 6. 기타 구현 자료
+### 7. 기타 구현 자료
 * [gpu_voxel_instancing_legacy](implementations/gpu_voxel_instancing_legacy): Marching Cubes 이전의 복셀 인스턴싱 방식 셰이더 보관 폴더입니다.
 * [gpu_smoke_test/test_render.py](implementations/gpu_smoke_test/test_render.py): ModernGL 기본 렌더링 확인용 삼각형 테스트입니다.
 
-### 7. 기술 문서
+### 8. 기술 문서
 * [gui_architecture_qa.md](docs/gui_architecture_qa.md): 최적화(FPS, dt) 및 전문 GUI 연동 아키텍처 기술 Q&A 백서입니다.
 * [noise_complexity_comparison.md](docs/noise_complexity_comparison.md): 펄린 노이즈와 심플렉스 노이즈의 차원별 연산 절차 및 수학적 복잡도 분석 문서입니다.
 * [terrain_synthesis_methods.md](docs/terrain_synthesis_methods.md): 단순 노이즈를 사실적인 산맥, 평야, 협곡 등으로 결합 및 가공하는 지형 합성 이론 가이드입니다.
@@ -69,6 +74,10 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * **CPU 버전**: `uv run .\implementations\cpu_heightfield\main_opensimplex_2014_cpu.py` (또는 `python .\implementations\cpu_heightfield\main_opensimplex_2014_cpu.py`)
 * **GPU 높이장 버전**: `uv run .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py` (또는 `python .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py`)
 
+#### 정적 지형 생성 유틸리티 실행:
+* **GPU 레이어 UI 버전**: `uv run .\implementations\gpu_terrain_generation\main_gpu_terrain_generator.py`
+* **CPU 레이어 UI 버전**: `uv run .\implementations\cpu_terrain_generation\main_cpu_terrain_generator.py`
+
 #### 등가집합 추출 실행:
 * **GPU Marching Squares 버전**: `uv run .\implementations\gpu_marching_squares\main_simplex_2d_gpu_marching_squares.py` (또는 `python .\implementations\gpu_marching_squares\main_simplex_2d_gpu_marching_squares.py`)
 * **GPU Marching Cubes 버전**: `uv run .\implementations\gpu_marching_cubes\main_opensimplex_2014_gpu_4d.py` (또는 `python .\implementations\gpu_marching_cubes\main_opensimplex_2014_gpu_4d.py`)
@@ -88,3 +97,22 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 | **방향키 위(▲) / 아래(▼)** | 격자 해상도 조절 [3D 지형: Resolution +/- 10, 최댓값 400] / 복셀 해상도 조절 [4D 치즈: Resolution +/- 8, 범위 8~256] |
 | **방향키 좌(◀) / 우(▶)** | 4D W/시간축 슬라이스 좌표 조절 (Slice +/- 0.05) [4D 버전 전용] |
 | **PAGE_UP / PAGE_DOWN** | 파도 진폭 높이 조절 [3D 지형: +/- 0.01] / 복셀 밀도 임계값 조절 [4D 치즈: +/- 0.05, 범위 -0.8~0.8] |
+
+### 정적 지형 생성 유틸리티 조작
+
+GPU/CPU 레이어 UI 버전은 같은 조작을 사용합니다.
+
+| 조작 키 / 마우스 | 기능 설명 |
+| :--- | :--- |
+| **1 / 2 / 3** | 1/2/3 옥타브 fBm 레이어를 랜덤 파라미터로 추가 |
+| **A** | 랜덤 지형 레이어 추가 |
+| **V / B / G / W** | Valley / Billow / Ridged / Warped 레이어 추가 |
+| **TAB** | 선택 레이어 변경 |
+| **E** | 선택 레이어 켜기 / 끄기 |
+| **BACKSPACE / DELETE** | 선택 레이어 삭제 |
+| **[ / ]** | 선택 레이어 진폭 감소 / 증가 |
+| **PAGE_UP / PAGE_DOWN** | 선택 레이어 주파수 증가 / 감소 |
+| **UP / DOWN** | 격자 해상도 증가 / 감소 |
+| **C** | 컬러 팔레트 전환 |
+| **R** | 지형 레이어 스택 초기화 |
+| **HOME** | 카메라 초기화 |
