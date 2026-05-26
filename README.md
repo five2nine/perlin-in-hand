@@ -10,32 +10,39 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * **실시간 법선 벡터(Normal) 계산**: 유한차분법(Finite Difference)을 셰이더 내에서 활용하여 노이즈 높이에 따른 정확한 음영(Lighting)과 입체감을 표현합니다.
 * **최적화된 프레임 제한**: VSync 비활성화 환경에서도 GPU 과부하(3500+ FPS)를 방지하기 위해 프로그램 자체에서 **60 FPS 프레임 캡(Capping)**을 지원합니다. (GPU 사용량을 50%+에서 1~2%로 절약)
 * **카메라 극점 반전 예외 처리**: 창 최대화 혹은 빠른 화면 드래그 시 카메라 축이 180도 돌아가 뒤집히는 물리 특이점(lookAt Singularity) 문제를 방지하는 필터가 적용되어 있습니다.
-* **모듈화된 셰이더 설계**: 관리 및 유지보수가 쉽도록 버텍스/프레임 셰이더 코드를 각각 `shaders/` 폴더 산하의 `perlin_2002.vert`와 `perlin_2002.frag` 파일로 분리했습니다.
+* **모듈화된 셰이더 설계**: 관리 및 유지보수가 쉽도록 구현 방법별 폴더 아래에 실행 파일과 대응 셰이더를 함께 배치했습니다.
 * **4가지 다이내믹 컬러 팔레트**: Viridis, Magma, Natural Terrain(자연 지형), Cyberpunk Neon 모드를 실시간으로 전환할 수 있습니다.
 
 ---
 
 ## 📂 프로젝트 구조 (Project Structure)
 
-### 1. 2002년 개선형 펄린 노이즈 (Perlin Noise 2002)
-* [main_perlin_2002_cpu.py](file:///g:/dev/Playground/perlin-in-hand/main_perlin_2002_cpu.py): **CPU 연산** 기반으로 펄린 노이즈를 계산하여 matplotlib 3D 애니메이션으로 출력하는 파이썬 스크립트입니다.
-* [main_perlin_2002_gpu.py](file:///g:/dev/Playground/perlin-in-hand/main_perlin_2002_gpu.py): **GPU 연산** 기반으로 펄린 노이즈 및 법선 벡터를 셰이더에서 계산하고 ModernGL로 실시간 렌더링하는 파이썬 엔트리포인트입니다.
-* [perlin_2002.vert](file:///g:/dev/Playground/perlin-in-hand/shaders/perlin_2002.vert): 5차 다항식을 활용해 연속된 2차 미분(C2 연속성)을 연산하고 법선 벡터를 셰이더 내에서 연산하는 버텍스 셰이더입니다.
-* [perlin_2002.frag](file:///g:/dev/Playground/perlin-in-hand/shaders/perlin_2002.frag): 펄린 노이즈 높이에 따른 조명 및 컬러 매핑 프래그먼트 셰이더입니다.
+### 1. CPU 높이장 구현
+* [main_perlin_2002_cpu.py](implementations/cpu_heightfield/main_perlin_2002_cpu.py): `perlin.Perlin`을 호출해 `(x, y, t)` 높이장을 계산하고 matplotlib 3D 표면으로 출력합니다.
+* [main_opensimplex_2014_cpu.py](implementations/cpu_heightfield/main_opensimplex_2014_cpu.py): `opensimplex` 라이브러리로 `(x, y, t)` 높이장을 계산하고 matplotlib 3D 표면으로 출력합니다.
 
-### 2. 2014년 오픈심플렉스 노이즈 (OpenSimplex Noise 2014)
-* [main_opensimplex_2014_cpu.py](file:///g:/dev/Playground/perlin-in-hand/main_opensimplex_2014_cpu.py): **CPU 연산** 기반으로 오픈심플렉스 노이즈를 계산하여 matplotlib 3D 애니메이션으로 출력하는 파이썬 스크립트입니다.
-* [main_opensimplex_2014_gpu.py](file:///g:/dev/Playground/perlin-in-hand/main_opensimplex_2014_gpu.py): **GPU 연산** 기반으로 3D 오픈심플렉스 노이즈를 계산하고 ModernGL로 실시간 렌더링하는 파이썬 엔트리포인트입니다.
-* [main_opensimplex_2014_gpu_4d.py](file:///g:/dev/Playground/perlin-in-hand/main_opensimplex_2014_gpu_4d.py): **GPU 연산** 기반으로 4D 심플렉스 노이즈를 연산하여 3D 볼륨의 복셀 스위스 치즈(Voxel Swiss Cheese) 블록을 실시간 렌더링하고 시각화하는 파이썬 엔트리포인트입니다.
-* [opensimplex_2014.vert](file:///g:/dev/Playground/perlin-in-hand/shaders/opensimplex_2014.vert): 3차원 공간 상에서 4-Point BCC 격자 탐색(OpenSimplex2S)을 통해 축 정렬 격자 줄무늬 왜곡을 해소하고, **해석적 도함수(Analytical Derivative)**를 활용해 0의 오차로 즉각적인 법선 벡터를 추출해 내는 버텍스 셰이더입니다.
-* [opensimplex_2014_4d.vert](file:///g:/dev/Playground/perlin-in-hand/shaders/opensimplex_2014_4d.vert): 4차원 공간(3D 복셀 공간 + 시간) 상에서 Stefan Gustavson의 4D Simplex Noise를 연산하고, 밀도 임계값을 통해 내부 구멍을 깎아내는 인스턴싱 복셀용 버텍스 셰이더입니다.
-* [opensimplex_2014.frag](file:///g:/dev/Playground/perlin-in-hand/shaders/opensimplex_2014.frag): 3D 오픈심플렉스 지형 전용 프래그먼트 셰이더입니다.
-* [opensimplex_2014_4d.frag](file:///g:/dev/Playground/perlin-in-hand/shaders/opensimplex_2014_4d.frag): 4D 심플렉스 복셀 치즈 전용 프래그먼트 셰이더입니다.
+### 2. CPU 직접 Perlin 구현
+* [main_perlin_my_cpu.py](implementations/cpu_manual_perlin/main_perlin_my_cpu.py): 2D Perlin의 gradient, dot product, fade 보간 절차를 직접 구현한 설명용 스크립트입니다.
 
-### 3. 기술 문서
-* [gui_architecture_qa.md](file:///g:/dev/Playground/perlin-in-hand/docs/gui_architecture_qa.md): 최적화(FPS, dt) 및 전문 GUI 연동 아키텍처 기술 Q&A 백서입니다.
-* [noise_complexity_comparison.md](file:///g:/dev/Playground/perlin-in-hand/docs/noise_complexity_comparison.md): 펄린 노이즈와 심플렉스 노이즈의 차원별 연산 절차 및 수학적 복잡도 분석 문서입니다.
-* [terrain_synthesis_methods.md](file:///g:/dev/Playground/perlin-in-hand/docs/terrain_synthesis_methods.md): 단순 노이즈를 사실적인 산맥, 평야, 협곡 등으로 결합 및 가공하는 지형 합성 이론 가이드입니다.
+### 3. GPU 높이장 구현
+* [main_perlin_2002_gpu.py](implementations/gpu_heightfield/main_perlin_2002_gpu.py): GPU 셰이더에서 Perlin 높이장과 finite diff 법선을 계산합니다.
+* [main_opensimplex_2014_gpu.py](implementations/gpu_heightfield/main_opensimplex_2014_gpu.py): GPU 셰이더에서 OpenSimplex2 높이장과 해석적 법선을 계산합니다.
+* [shaders/perlin_2002.vert](implementations/gpu_heightfield/shaders/perlin_2002.vert): Perlin 높이장 버텍스 셰이더입니다.
+* [shaders/opensimplex_2014.vert](implementations/gpu_heightfield/shaders/opensimplex_2014.vert): OpenSimplex2 높이장 버텍스 셰이더입니다.
+
+### 4. GPU Marching Cubes 구현
+* [main_opensimplex_2014_gpu_4d.py](implementations/gpu_marching_cubes/main_opensimplex_2014_gpu_4d.py): 4D simplex 밀도장 `d = func(x, y, z, t)`에서 Marching Cubes로 3D 등가면을 추출합니다.
+* [marching_cubes_table.py](implementations/gpu_marching_cubes/marching_cubes_table.py): Marching Cubes 삼각화 테이블입니다.
+* [shaders/marching_cubes_tf.geom](implementations/gpu_marching_cubes/shaders/marching_cubes_tf.geom): transform feedback로 등가면 삼각형을 생성하는 geometry shader입니다.
+
+### 5. 기타 구현 자료
+* [gpu_voxel_instancing_legacy](implementations/gpu_voxel_instancing_legacy): Marching Cubes 이전의 복셀 인스턴싱 방식 셰이더 보관 폴더입니다.
+* [gpu_smoke_test/test_render.py](implementations/gpu_smoke_test/test_render.py): ModernGL 기본 렌더링 확인용 삼각형 테스트입니다.
+
+### 6. 기술 문서
+* [gui_architecture_qa.md](docs/gui_architecture_qa.md): 최적화(FPS, dt) 및 전문 GUI 연동 아키텍처 기술 Q&A 백서입니다.
+* [noise_complexity_comparison.md](docs/noise_complexity_comparison.md): 펄린 노이즈와 심플렉스 노이즈의 차원별 연산 절차 및 수학적 복잡도 분석 문서입니다.
+* [terrain_synthesis_methods.md](docs/terrain_synthesis_methods.md): 단순 노이즈를 사실적인 산맥, 평야, 협곡 등으로 결합 및 가공하는 지형 합성 이론 가이드입니다.
 
 ---
 
@@ -48,13 +55,14 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 ### 실행 명령어
 
 #### 펄린 노이즈 (2002) 실행:
-* **CPU 버전**: `uv run .\main_perlin_2002_cpu.py` (또는 `python .\main_perlin_2002_cpu.py`)
-* **GPU 버전**: `uv run .\main_perlin_2002_gpu.py` (또는 `python .\main_perlin_2002_gpu.py`)
+* **CPU 버전**: `uv run .\implementations\cpu_heightfield\main_perlin_2002_cpu.py` (또는 `python .\implementations\cpu_heightfield\main_perlin_2002_cpu.py`)
+* **CPU 직접 구현**: `uv run .\implementations\cpu_manual_perlin\main_perlin_my_cpu.py` (또는 `python .\implementations\cpu_manual_perlin\main_perlin_my_cpu.py`)
+* **GPU 버전**: `uv run .\implementations\gpu_heightfield\main_perlin_2002_gpu.py` (또는 `python .\implementations\gpu_heightfield\main_perlin_2002_gpu.py`)
 
 #### 오픈심플렉스 노이즈 (2014) 실행:
-* **CPU 버전**: `uv run .\main_opensimplex_2014_cpu.py` (또는 `python .\main_opensimplex_2014_cpu.py`)
-* **GPU 3D 버전**: `uv run .\main_opensimplex_2014_gpu.py` (또는 `python .\main_opensimplex_2014_gpu.py`)
-* **GPU 4D 버전 (복셀 치즈)**: `uv run .\main_opensimplex_2014_gpu_4d.py` (또는 `python .\main_opensimplex_2014_gpu_4d.py`)
+* **CPU 버전**: `uv run .\implementations\cpu_heightfield\main_opensimplex_2014_cpu.py` (또는 `python .\implementations\cpu_heightfield\main_opensimplex_2014_cpu.py`)
+* **GPU 높이장 버전**: `uv run .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py` (또는 `python .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py`)
+* **GPU Marching Cubes 버전**: `uv run .\implementations\gpu_marching_cubes\main_opensimplex_2014_gpu_4d.py` (또는 `python .\implementations\gpu_marching_cubes\main_opensimplex_2014_gpu_4d.py`)
 
 ---
 

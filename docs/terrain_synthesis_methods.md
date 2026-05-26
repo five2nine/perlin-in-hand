@@ -176,4 +176,4 @@ float get_final_terrain_height(vec2 uv) {
     return height;
 }
 ```
-이 셰이더를 현재 프로젝트의 `shaders/perlin_2002.vert` 또는 `shaders/opensimplex_2014.vert` 내부의 `get_height` 함수 자리에 대체하면, 기존의 단순했던 빨래판 지형이 즉각적으로 **웅장한 실시간 3D 산맥 지형**으로 뒤바뀝니다.
+이 셰이더를 현재 프로젝트의 `implementations/gpu_heightfield/shaders/perlin_2002.vert` 또는 `implementations/gpu_heightfield/shaders/opensimplex_2014.vert` 내부의 `get_height` 함수 자리에 대체하면, 기존의 단순했던 빨래판 지형이 즉각적으로 **웅장한 실시간 3D 산맥 지형**으로 뒤바뀝니다.

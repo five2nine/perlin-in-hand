@@ -36,7 +36,38 @@
    $$S(t) = 6t^5 - 15t^4 + 10t^3$$
 6. **다중 선형 보간 (Lerp)**: 감쇠 계수 $S(u), S(v), S(w)$를 가중치로 삼아, X축 방향 4회 $\to$ Y축 방향 2회 $\to$ Z축 방향 1회 순으로 선형 보간을 누적 적용합니다.
 
-#### 2) 시간 복잡도
+#### 2) 프로젝트 구현에서의 `grad`와 finite diff 구분
+
+이 프로젝트의 CPU Perlin 예제는 두 종류입니다. `implementations/cpu_manual_perlin/main_perlin_my_cpu.py`는 설명용 직접 구현이고, `implementations/cpu_heightfield/main_perlin_2002_cpu.py`는 외부 `perlin.Perlin` 구현을 호출합니다.
+
+`implementations/cpu_manual_perlin/main_perlin_my_cpu.py`의 직접 구현에서는 `grad`라는 함수명을 쓰지 않지만, 격자 꼭짓점마다 저장한 `random_angles`가 Perlin의 gradient 방향입니다. 각 꼭짓점의 gradient 벡터는 아래처럼 해석됩니다.
+
+```text
+grad = (cos(angle), sin(angle))
+offset = (px - ix * cell_size, py - iy * cell_size)
+contribution = dot(grad, offset)
+```
+
+따라서 `dot_at_corner(ix, iy, px, py)`는 gradient 자체를 반환하는 함수가 아니라, 해당 꼭짓점의 gradient 벡터와 샘플점까지의 offset 벡터를 내적한 스칼라 기여값을 반환합니다. `n00`, `n10`, `n01`, `n11`은 네 꼭짓점의 기여값이고, 최종 노이즈 값은 이 네 값을 fade 곡선으로 보간한 결과입니다.
+
+`implementations/cpu_heightfield/main_perlin_2002_cpu.py`는 `generator.noise(x, y, t)`를 호출하므로 파일 내부에서 gradient를 직접 만들지 않습니다. gradient 해싱, 내적, 보간은 외부 `perlin.Perlin` 구현 내부에서 수행됩니다.
+
+finite diff는 위의 Perlin 내부 gradient와 다른 개념입니다. finite diff는 이미 계산된 높이 함수 $h(x,y)$의 변화율을 근사해 표면 법선을 구하는 방법입니다.
+
+```text
+h0 = h(x, y)
+hx = h(x + eps, y)
+hy = h(x, y + eps)
+dh/dx ≈ (hx - h0) / eps
+dh/dy ≈ (hy - h0) / eps
+normal ≈ normalize((-dh/dx, 1, -dh/dy))
+```
+
+현재 CPU Perlin 파일들은 이 finite diff 법선을 직접 계산하지 않습니다. CPU 파일은 matplotlib의 `plot_surface`로 높이장을 그리는 데 집중합니다. 반면 GPU Perlin 셰이더 `implementations/gpu_heightfield/shaders/perlin_2002.vert`는 `h0`, `hx`, `hy`를 다시 샘플해 finite diff 법선을 계산합니다.
+
+정리하면, CPU 직접 구현에는 Perlin 내부 gradient가 있으며 이는 `random_angles`와 `dot_at_corner`로 표현됩니다. CPU Perlin 호출 버전에는 gradient 계산이 외부 라이브러리 안에 있습니다. finite diff는 Perlin 값을 만든 뒤 렌더링 법선을 얻기 위한 별도 미분 근사이며, 현재 프로젝트에서는 GPU Perlin 셰이더에서 직접 사용됩니다.
+
+#### 3) 시간 복잡도
 * **시간 복잡도**: **$O(2^N)$** (차원이 늘어날수록 보간 연산과 해시 테이블 참조량이 $2^N$으로 폭증)
 
 ---
@@ -51,7 +82,7 @@
 2. **단위 심플렉스 셀 판별**: 찌그러진 격자 공간 상에서 내림(`floor`) 연산 후 소수점 이하의 분수 성분($dx, dy, dz$)을 계산합니다.
 3. **진입 심플렉스 경로 탐색 및 꼭짓점 추출 (Sorting)**: 
    * $dx, dy, dz$의 상대적인 크기를 비교하여 정렬합니다. 
-   * 예를 들어 $dx > dy > dz$라면, 점 $P$가 속한 사면체의 꼭짓점 경로는 $(0,0,0) \to (1,0,0) \to (1,1,0) \to (1,1,1)$ 순서가 됩니다. 
+   * 예를 들어 $dx > dy > dz$인 경우, 점 $P$가 속한 사면체의 꼭짓점 경로는 $(0,0,0) \to (1,0,0) \to (1,1,0) \to (1,1,1)$ 순서가 됩니다. 
    * 이 정렬 연산은 차원 $N$에 대해 **$N!$** 개의 분기 경로를 가집니다.
 4. **공간 역시어링 변환 (Unskewing)**: 찾아낸 $N+1$개의 꼭짓점 좌표를 다시 원래 공간 좌표계로 돌려놓기 위해 역변환 상수를 곱합니다.
    $$G_N = \frac{1 - \frac{1}{\sqrt{N+1}}}{N} \quad \left(G_2 \approx 0.211, \quad G_3 = \frac{1}{6}\right)$$
