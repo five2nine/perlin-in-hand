@@ -2,6 +2,8 @@
 # https://www.youtube.com/shorts/kY9TYQYxCZM
 
 import time
+from pathlib import Path
+
 import perlin
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,6 +17,8 @@ CELL_DIVISION = 100
 FREQUENCY = 10
 Z_MIN, Z_MAX = -0.1, 0.1
 TARGET_FPS = 60
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+OUTPUT_DIR = PROJECT_ROOT / "outputs" / "heightfield_cpu"
 
 
 def compute_z(
@@ -95,7 +99,8 @@ def main() -> None:
     y_fine: np.ndarray = np.linspace(0, DOMAIN_MAX, CELL_DIVISION)
     X_fine, Y_fine = np.meshgrid(x_fine, y_fine)
 
-    output_path = "anim.mp4"
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = OUTPUT_DIR / "anim_perlin_2002.mp4"
     interval_ms: float = 1000 / TARGET_FPS
 
     fig: Figure = plt.figure(figsize=(10, 10))
@@ -131,7 +136,7 @@ def main() -> None:
             pbar.refresh()
 
         animation.save(
-            filename=output_path,
+            filename=str(output_path),
             fps=TARGET_FPS,
             progress_callback=progress_callback,
         )

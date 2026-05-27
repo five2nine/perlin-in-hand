@@ -23,6 +23,8 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * [main_perlin_2002_cpu.py](implementations/heightfield_cpu/main_perlin_2002_cpu.py): `perlin.Perlin` 라이브러리를 호출해 `(x, y, t)` heightfield를 계산하고 matplotlib 3D 표면으로 출력합니다.
 * [main_opensimplex_2014_cpu.py](implementations/heightfield_cpu/main_opensimplex_2014_cpu.py): `opensimplex` 라이브러리로 `(x, y, t)` heightfield를 계산하고 matplotlib 3D 표면으로 출력합니다.
 
+생성된 MP4/PNG 산출물은 `outputs/heightfield_cpu` 아래에 둡니다.
+
 ### 2. Heightfield GPU 구현
 * [main_perlin_2002_gpu.py](implementations/heightfield_gpu/main_perlin_2002_gpu.py): GPU 셰이더에서 Perlin 높이장과 finite diff 법선을 계산합니다.
 * [main_opensimplex_2014_gpu.py](implementations/heightfield_gpu/main_opensimplex_2014_gpu.py): GPU 셰이더에서 OpenSimplex2 높이장과 해석적 법선을 계산합니다.

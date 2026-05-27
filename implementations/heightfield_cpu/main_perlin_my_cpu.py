@@ -1,6 +1,8 @@
 # 게임에서 지형을 만들 때 쓰는 특수한 수학 기법 #프로그래밍 #펄린노이즈 #수학 #절차적생성
 # https://www.youtube.com/shorts/kY9TYQYxCZM
 
+from pathlib import Path
+
 import perlin
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,6 +10,8 @@ import matplotlib.pyplot as plt
 DOMAIN_MAX = 1
 CELL_DIVISION = 100
 BASE_DIVISION = 10
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+OUTPUT_DIR = PROJECT_ROOT / "outputs" / "heightfield_cpu"
 
 
 def _plot_perlin_surface(
@@ -15,7 +19,7 @@ def _plot_perlin_surface(
     Y_fine: np.ndarray,
     Z: np.ndarray,
     cell_division: int,
-    pngname: str = None,
+    pngname: str | Path | None = None,
 ) -> None:
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection="3d")
@@ -36,6 +40,7 @@ def _plot_perlin_surface(
 
 
 def test_perlin() -> None:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     generator = perlin.Perlin(6789)
 
     x_fine: np.ndarray = np.linspace(0, DOMAIN_MAX, CELL_DIVISION)
@@ -53,7 +58,13 @@ def test_perlin() -> None:
                 / BASE_DIVISION
             )
 
-    _plot_perlin_surface(X_fine, Y_fine, Z, cell_division=CELL_DIVISION, pngname="1test_perlin")
+    _plot_perlin_surface(
+        X_fine,
+        Y_fine,
+        Z,
+        cell_division=CELL_DIVISION,
+        pngname=OUTPUT_DIR / "1test_perlin.png",
+    )
 
 
 def my_perlin() -> None:
@@ -98,7 +109,14 @@ def my_perlin() -> None:
             nx1: float = n01 + sx * (n11 - n01)
             Z[row, col] = nx0 + sy * (nx1 - nx0)
 
-    _plot_perlin_surface(X_fine, Y_fine, Z, cell_division=CELL_DIVISION, pngname="2my_perlin")
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    _plot_perlin_surface(
+        X_fine,
+        Y_fine,
+        Z,
+        cell_division=CELL_DIVISION,
+        pngname=OUTPUT_DIR / "2my_perlin.png",
+    )
 
 
 def main() -> None:
