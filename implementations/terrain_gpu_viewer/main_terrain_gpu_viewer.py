@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
+import math
 from pathlib import Path
 import sys
 import time
@@ -125,6 +127,36 @@ def parse_viewer_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
 
 
 VIEWER_ARGS, MGLW_ARGS = parse_viewer_args(sys.argv[1:])
+PLANE_LIGHT_POS = (-0.35, 1.3, 0.45)
+SPHERE_LIGHT_POS = (-1.8, 2.4, 2.0)
+
+
+@dataclass(frozen=True)
+class GizmoProjection:
+    x: float
+    y: float
+    depth: float
+
+
+def direction_from_lon_lat(lon_deg: float, lat_deg: float) -> np.ndarray:
+    lon = math.radians(lon_deg)
+    lat = math.radians(lat_deg)
+    cos_lat = math.cos(lat)
+    return np.array(
+        [
+            cos_lat * math.cos(lon),
+            math.sin(lat),
+            cos_lat * math.sin(lon),
+        ],
+        dtype=np.float64,
+    )
+
+
+def lon_lat_from_direction(direction: np.ndarray) -> tuple[float, float]:
+    normal = direction / max(float(np.linalg.norm(direction)), 1e-12)
+    lon = math.degrees(math.atan2(float(normal[2]), float(normal[0])))
+    lat = math.degrees(math.asin(max(-1.0, min(1.0, float(normal[1])))))
+    return lon, lat
 
 
 def list_exported_npz_files(current_path: Path | None = None) -> list[Path]:
@@ -269,12 +301,15 @@ class TerrainNpzInfoPanel:
             imgui.text(f"Backend: {app.metadata.get('backend', 'unknown')}")
             imgui.text(f"Layers: {app.metadata.get('layer_count', 'unknown')}")
             imgui.text(f"Palette: {app.palette_names[app.palette]}")
+            imgui.text(f"Light: {app.light_label()}")
             imgui.text(f"FPS: {app.fps_val:.1f}")
             imgui.separator()
             self._draw_loading_menu(app)
             imgui.separator()
             imgui.text("Mouse drag rotate | Wheel zoom | C palette | HOME reset")
         imgui.end()
+        if app.is_sphere_terrain():
+            self._draw_orientation_gizmo(app)
 
     def _draw_loading_menu(self, app: Any) -> None:
         imgui.text("Load Model")
@@ -316,6 +351,147 @@ class TerrainNpzInfoPanel:
 
         if app.load_status:
             imgui.text_wrapped(app.load_status)
+
+    def _draw_orientation_gizmo(self, app: Any) -> None:
+        width, _height = self.window.size
+        size = 188.0
+        margin = 18.0
+        center_x = float(width) - margin - size * 0.5
+        center_y = margin + size * 0.5
+        radius = size * 0.32
+
+        draw_list = imgui.get_foreground_draw_list()
+        color_panel = imgui.get_color_u32_rgba(0.03, 0.035, 0.04, 0.68)
+        color_outline = imgui.get_color_u32_rgba(0.82, 0.86, 0.82, 0.78)
+        color_back = imgui.get_color_u32_rgba(0.38, 0.43, 0.45, 0.48)
+        color_equator = imgui.get_color_u32_rgba(0.42, 0.66, 0.72, 0.58)
+        color_lon0 = imgui.get_color_u32_rgba(0.95, 0.72, 0.28, 0.92)
+        color_lon90 = imgui.get_color_u32_rgba(0.38, 0.78, 0.95, 0.92)
+        color_lon_neg90 = imgui.get_color_u32_rgba(0.95, 0.46, 0.46, 0.92)
+        color_north = imgui.get_color_u32_rgba(0.94, 0.95, 0.88, 1.0)
+        color_text = imgui.get_color_u32_rgba(0.90, 0.93, 0.90, 0.94)
+
+        left = center_x - size * 0.5
+        top = center_y - size * 0.5
+        right = center_x + size * 0.5
+        bottom = center_y + size * 0.5 + 22.0
+        draw_list.add_rect_filled(left, top, right, bottom, color_panel, 8.0)
+        draw_list.add_circle_filled(
+            center_x,
+            center_y,
+            radius,
+            imgui.get_color_u32_rgba(0.09, 0.12, 0.14, 0.82),
+            48,
+        )
+        draw_list.add_circle(center_x, center_y, radius, color_outline, 64, 1.4)
+
+        basis = self._camera_projection_basis(app)
+        self._draw_gizmo_circle(
+            draw_list,
+            basis,
+            center_x,
+            center_y,
+            radius,
+            lambda t: direction_from_lon_lat(math.degrees(t), 0.0),
+            color_equator,
+            color_back,
+            1.2,
+            closed=True,
+        )
+        for lon, color in [(0.0, color_lon0), (90.0, color_lon90), (-90.0, color_lon_neg90)]:
+            self._draw_gizmo_circle(
+                draw_list,
+                basis,
+                center_x,
+                center_y,
+                radius,
+                lambda t, lon=lon: direction_from_lon_lat(lon, math.degrees(t)),
+                color,
+                color_back,
+                1.8,
+                closed=False,
+                t_min=-math.pi * 0.5,
+                t_max=math.pi * 0.5,
+            )
+
+        markers = [
+            ("N", np.array([0.0, 1.0, 0.0], dtype=np.float64), color_north),
+            ("0", np.array([1.0, 0.0, 0.0], dtype=np.float64), color_lon0),
+            ("+90", np.array([0.0, 0.0, 1.0], dtype=np.float64), color_lon90),
+            ("-90", np.array([0.0, 0.0, -1.0], dtype=np.float64), color_lon_neg90),
+        ]
+        for label, direction, color in markers:
+            point = self._project_direction(direction, basis, center_x, center_y, radius)
+            marker_color = color if point.depth >= 0.0 else color_back
+            marker_radius = 4.0 if label == "N" else 3.5
+            draw_list.add_circle_filled(point.x, point.y, marker_radius, marker_color, 16)
+            draw_list.add_text(point.x + 5.0, point.y - 7.0, marker_color, label)
+
+        view_lon, view_lat = lon_lat_from_direction(np.asarray(app.camera.position, dtype=np.float64))
+        draw_list.add_text(
+            left + 10.0,
+            bottom - 17.0,
+            color_text,
+            f"view {view_lon:+.1f}/{view_lat:+.1f}",
+        )
+
+    def _camera_projection_basis(
+        self,
+        app: Any,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        view_dir = np.asarray(app.camera.position, dtype=np.float64)
+        view_dir = view_dir / max(float(np.linalg.norm(view_dir)), 1e-12)
+        world_up = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+        right = np.cross(world_up, view_dir)
+        if float(np.linalg.norm(right)) < 1e-6:
+            right = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+        else:
+            right = right / float(np.linalg.norm(right))
+        up = np.cross(view_dir, right)
+        up = up / max(float(np.linalg.norm(up)), 1e-12)
+        return right, up, view_dir
+
+    def _project_direction(
+        self,
+        direction: np.ndarray,
+        basis: tuple[np.ndarray, np.ndarray, np.ndarray],
+        center_x: float,
+        center_y: float,
+        radius: float,
+    ) -> GizmoProjection:
+        right, up, view_dir = basis
+        normal = direction / max(float(np.linalg.norm(direction)), 1e-12)
+        x = float(np.dot(normal, right))
+        y = float(np.dot(normal, up))
+        depth = float(np.dot(normal, view_dir))
+        return GizmoProjection(center_x + x * radius, center_y - y * radius, depth)
+
+    def _draw_gizmo_circle(
+        self,
+        draw_list: Any,
+        basis: tuple[np.ndarray, np.ndarray, np.ndarray],
+        center_x: float,
+        center_y: float,
+        radius: float,
+        direction_at: Any,
+        front_color: int,
+        back_color: int,
+        thickness: float,
+        closed: bool,
+        t_min: float = 0.0,
+        t_max: float = math.tau,
+    ) -> None:
+        samples = 96 if closed else 64
+        points = [
+            self._project_direction(direction_at(t), basis, center_x, center_y, radius)
+            for t in np.linspace(t_min, t_max, samples)
+        ]
+        segment_count = len(points) if closed else len(points) - 1
+        for index in range(segment_count):
+            a = points[index]
+            b = points[(index + 1) % len(points)]
+            color = front_color if (a.depth + b.depth) * 0.5 >= 0.0 else back_color
+            draw_list.add_line(a.x, a.y, b.x, b.y, color, thickness)
 
 
 class GPUTerrainNpzViewerApp(mglw.WindowConfig):
@@ -383,6 +559,19 @@ class GPUTerrainNpzViewerApp(mglw.WindowConfig):
         if palette.startswith("ink"):
             return 2
         return 0
+
+    def is_sphere_terrain(self) -> bool:
+        return self.metadata.get("generator_type") == "sphere_terrain"
+
+    def light_pos(self) -> tuple[float, float, float]:
+        if self.is_sphere_terrain():
+            return SPHERE_LIGHT_POS
+        return PLANE_LIGHT_POS
+
+    def light_label(self) -> str:
+        if self.is_sphere_terrain():
+            return "Sphere generator"
+        return "Plane generator"
 
     def refresh_export_files(self, selected_path: Path | None = None) -> None:
         selected = Path(selected_path or self.export_path).resolve()
@@ -528,7 +717,7 @@ class GPUTerrainNpzViewerApp(mglw.WindowConfig):
         self.render_prog["m_view"].write(self.camera.matrix)
         self.render_prog["m_model"].write(self.model_matrix_bytes)
         self.render_prog["u_palette"].value = int(self.palette)
-        self.render_prog["u_light_pos"].value = (-0.35, 1.3, 0.45)
+        self.render_prog["u_light_pos"].value = self.light_pos()
         self.render_prog["u_height_color_scale"].value = float(self.mesh["height_scale"])
 
         try:

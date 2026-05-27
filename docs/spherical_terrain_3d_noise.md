@@ -6,6 +6,8 @@
 
 개념을 공부하기 위한 설명과 작업 중 나온 질문과 답변은 [spherical_terrain_study.md](spherical_terrain_study.md)에 정리한다. 이 문서는 실행법과 관찰 기준을 중심으로 둔다.
 
+카메라 orbit, 물체 회전, 월드 고정 조명에 관한 해석은 [camera_object_world_viewing.md](camera_object_world_viewing.md)를 함께 본다.
+
 GPU에서 terrain 샘플 생성을 처리하기 위한 선택지, 특히 tessellation shader와 compute shader의 차이도 같은 학습 문서의 Q&A에 기록한다. 현재 구현은 compute shader 경로를 사용한다.
 
 핵심 샘플링 식은 다음과 같다.

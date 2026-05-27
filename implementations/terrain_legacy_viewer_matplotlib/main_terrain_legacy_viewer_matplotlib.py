@@ -11,7 +11,7 @@ import numpy as np
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[1]
-COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_gpu_runtime_common"
+COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_legacy_common"
 if str(COMMON_DIR) not in sys.path:
     sys.path.insert(0, str(COMMON_DIR))
 
@@ -20,7 +20,7 @@ from terrain_npz_loader import load_terrain, newest_export  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="View exported terrain_generation .npz files with Matplotlib.",
+        description="Legacy Matplotlib viewer for exported terrain .npz files.",
     )
     parser.add_argument(
         "path",

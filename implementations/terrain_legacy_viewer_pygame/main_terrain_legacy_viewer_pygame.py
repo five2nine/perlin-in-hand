@@ -13,7 +13,7 @@ import pygame
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[1]
-COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_gpu_runtime_common"
+COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_legacy_common"
 if str(COMMON_DIR) not in sys.path:
     sys.path.insert(0, str(COMMON_DIR))
 
@@ -55,7 +55,7 @@ def parse_window_size(value: str) -> tuple[int, int]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="CPU/Pygame viewer for exported terrain_generation .npz heightmaps.",
+        description="Legacy pygame-ce viewer for exported terrain .npz heightmaps.",
     )
     parser.add_argument(
         "path",

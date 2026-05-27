@@ -174,18 +174,18 @@ CPU 버전에서는 높은 해상도와 많은 레이어를 함께 쓰면 조작
 
 CPU 버전은 CPU에서 계산해 업로드한 현재 VBO를 읽어서 저장한다. GPU 버전은 transform feedback으로 구워진 현재 VBO를 읽어서 저장한다. 따라서 export 파일은 현재 화면에 렌더링되는 메시 데이터를 다른 프로그램에서 다시 읽기 위한 결과물이다.
 
-## Matplotlib Viewer
+## Legacy Matplotlib Viewer
 
-Export 파일은 Matplotlib 뷰어로 바로 확인할 수 있다.
+Export 파일은 legacy Matplotlib 뷰어로 바로 확인할 수 있다.
 
 ```powershell
-uv run .\implementations\terrain_npz_viewer_matplotlib\main_matplotlib_terrain_npz_viewer.py
+uv run .\implementations\terrain_legacy_viewer_matplotlib\main_terrain_legacy_viewer_matplotlib.py
 ```
 
 경로를 생략하면 `exports/terrain_generation`에서 가장 최근 `.npz` 파일을 연다. 특정 파일을 열 때는 파일 경로를 인자로 넘긴다.
 
 ```powershell
-uv run .\implementations\terrain_npz_viewer_matplotlib\main_matplotlib_terrain_npz_viewer.py .\exports\terrain_generation\terrain_gpu_512_20260526_225249.npz
+uv run .\implementations\terrain_legacy_viewer_matplotlib\main_terrain_legacy_viewer_matplotlib.py .\exports\terrain_generation\terrain_gpu_512_20260526_225249.npz
 ```
 
 뷰어는 `.npz` 안의 `metadata_json`에서 `grid_shape` 또는 `resolution`을 먼저 읽는다. 예전 export 파일처럼 해당 값이 없으면 `heights` 또는 `vertices`의 길이가 정사각형인지 확인해 `(sqrt(n), sqrt(n))` 형태로 추정한다. 따라서 현재 export 포맷에서는 데이터 형상을 판단할 수 있다.
@@ -197,15 +197,15 @@ heightmap은 그리드 인덱스 좌표를 사용한다. 512 해상도 파일은
 큰 지형은 3D surface를 그릴 때 느릴 수 있으므로 사용자가 원할 때 `--stride`로 샘플 간격을 조절한다.
 
 ```powershell
-uv run .\implementations\terrain_npz_viewer_matplotlib\main_matplotlib_terrain_npz_viewer.py --stride 8
+uv run .\implementations\terrain_legacy_viewer_matplotlib\main_terrain_legacy_viewer_matplotlib.py --stride 8
 ```
 
-## pygame-ce CPU NPZ Viewer
+## Legacy pygame-ce NPZ Viewer
 
-Export 파일은 pygame-ce 기반 CPU 뷰어로도 확인할 수 있다.
+Export 파일은 legacy pygame-ce 기반 CPU 뷰어로도 확인할 수 있다.
 
 ```powershell
-uv run .\implementations\terrain_npz_viewer_pygame\main_pygame_terrain_npz_viewer.py
+uv run .\implementations\terrain_legacy_viewer_pygame\main_terrain_legacy_viewer_pygame.py
 ```
 
 이 뷰어는 export 파일의 `heights` 배열을 CPU에서 색상화한 뒤 Pygame surface로 표시한다. 지형을 3D 메시로 다시 렌더링하지 않고 2D heightmap을 빠르게 보는 용도다. 창 크기를 바꿔도 이미지는 비율을 유지하고, 마우스 드래그로 pan, 마우스 휠 또는 `+`/`-`로 zoom, `C`로 palette, `R`로 view reset을 수행한다.
@@ -213,10 +213,10 @@ uv run .\implementations\terrain_npz_viewer_pygame\main_pygame_terrain_npz_viewe
 경로를 생략하면 `exports/terrain_generation`에서 가장 최근 `terrain_cpu_*.npz`, `terrain_gpu_*.npz`, `terrain_sphere_*.npz` 파일을 연다. 특정 파일을 열 때는 파일 경로를 인자로 넘긴다.
 
 ```powershell
-uv run .\implementations\terrain_npz_viewer_pygame\main_pygame_terrain_npz_viewer.py .\exports\terrain_generation\terrain_gpu_512_20260526_231238.npz
+uv run .\implementations\terrain_legacy_viewer_pygame\main_terrain_legacy_viewer_pygame.py .\exports\terrain_generation\terrain_gpu_512_20260526_231238.npz
 ```
 
-GPU 기반 terrain toolchain의 표준 뷰어는 `terrain_gpu_viewer`다. pygame-ce CPU 뷰어와 Matplotlib 뷰어는 보조 확인 도구로 남아 있으며, 세 뷰어는 모두 `terrain_gpu_runtime_common/terrain_npz_loader.py`를 통해 같은 방식으로 `.npz`의 데이터 형상을 판단한다.
+GPU 기반 terrain toolchain의 표준 뷰어는 `terrain_gpu_viewer`다. pygame-ce 뷰어와 Matplotlib 뷰어는 `terrain_legacy_*` 이름의 legacy 도구로 분리해 둔다. legacy 뷰어들은 `terrain_legacy_common/terrain_npz_loader.py`를 통해 `.npz` 데이터 형상을 읽으며, GPU toolchain의 정식 구성 요소로 다루지 않는다.
 
 ## GPU NPZ Viewer
 
@@ -226,7 +226,7 @@ Export 파일은 별도 GPU 뷰어로도 확인할 수 있다.
 uv run .\implementations\terrain_gpu_viewer\main_terrain_gpu_viewer.py
 ```
 
-경로를 생략하면 `exports/terrain_generation`에서 가장 최근 `terrain_cpu_*.npz` 또는 `terrain_gpu_*.npz` 파일을 연다. 특정 파일을 열 때는 파일 경로를 인자로 넘긴다.
+경로를 생략하면 `exports/terrain_generation`에서 가장 최근 `terrain_cpu_*.npz`, `terrain_gpu_*.npz`, `terrain_sphere_*.npz` 파일을 연다. 특정 파일을 열 때는 파일 경로를 인자로 넘긴다.
 
 ```powershell
 uv run .\implementations\terrain_gpu_viewer\main_terrain_gpu_viewer.py .\exports\terrain_generation\terrain_gpu_512_20260526_231238.npz
@@ -234,9 +234,13 @@ uv run .\implementations\terrain_gpu_viewer\main_terrain_gpu_viewer.py .\exports
 
 GPU 뷰어는 export 파일의 `vertices`와 `indices`를 그대로 GPU 버퍼에 올리고, 지형 생성기가 쓰는 `terrain_heightfield.vert/frag` 렌더 셰이더를 재사용한다. 따라서 Matplotlib 뷰어보다 제너레이터의 화면 성능과 표현에 가깝다.
 
-창 좌측의 `Loaded Terrain` 패널은 로딩된 파일 경로와 기본 사양을 표시한다. 표시 항목은 grid 또는 mesh 형태, vertex 수, triangle 수, height 범위, backend, layer 수, palette, FPS다. 패널은 ImGui 창이므로 접거나 이동할 수 있고, 패널 위에서 마우스를 조작하면 카메라 회전/줌과 충돌하지 않는다.
+뷰어의 빛 위치는 모델 타입별 제너레이터 화면을 재현하는 쪽으로 맞춘다. 평면 terrain은 평면 제너레이터의 light position을 쓰고, sphere terrain은 스피어 제너레이터의 light position을 쓴다.
+
+창 좌측의 `Loaded Terrain` 패널은 로딩된 파일 경로와 기본 사양을 표시한다. 표시 항목은 grid 또는 mesh 형태, vertex 수, triangle 수, height 범위, backend, layer 수, palette, light 기준, FPS다. 패널은 ImGui 창이므로 접거나 이동할 수 있고, 패널 위에서 마우스를 조작하면 카메라 회전/줌과 충돌하지 않는다.
 
 `Load Model` 메뉴는 프로그램을 닫지 않고 다른 export 파일을 읽기 위한 메뉴다. 콤보박스는 `exports/terrain_generation`의 `.npz` 파일과 현재 열린 파일의 폴더를 최신순으로 보여준다. `Load Selected`는 선택한 파일을 현재 GPU 버퍼와 VAO에 다시 업로드하고, `Reload`는 현재 파일을 디스크에서 다시 읽는다. `Prev`와 `Next`는 목록의 이전/다음 파일을 즉시 로드하고, `Refresh`는 새로 export된 파일을 목록에 반영한다. `Use file palette`를 켜면 로드할 때 파일 metadata의 palette를 사용하고, `Reset camera on load`를 켜면 파일을 바꿀 때 카메라도 기본 위치로 돌아간다.
+
+뷰어가 sphere terrain export를 읽었을 때는 우상단에 스피어 제너레이터와 같은 orientation gizmo를 그린다. 이 표시기는 북극 `N`, 경도 `0`, `+90`, `-90`, 현재 `view` 경도/위도를 보여주며, 카메라 회전 기준을 확인하는 용도다. 평면 terrain export에서는 표시하지 않는다.
 
 GPU 뷰어는 레이어 편집 기능을 갖지 않는다. export 파일은 이미 bake된 메시 상태를 보는 결과물이고, 제너레이터는 레이어 스택을 만들고 수정하는 도구다. 이 둘을 분리하면 저장된 메시를 검사하는 화면과 레이어를 생성하는 화면이 섞이지 않는다.
 

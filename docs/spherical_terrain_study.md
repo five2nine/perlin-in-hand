@@ -1,5 +1,7 @@
 # 구면 Terrain을 이해하기 위한 노트
 
+카메라 이동, 물체 회전, 월드 기준, 조명 기준의 구분은 [camera_object_world_viewing.md](camera_object_world_viewing.md)에 따로 정리한다.
+
 ## 핵심 질문
 
 평면 terrain은 보통 다음처럼 생각한다.

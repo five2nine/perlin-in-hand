@@ -1,4 +1,4 @@
-# Static CPU heightfield terrain generator with the same UI/output as the GPU version.
+# Legacy static CPU heightfield terrain generator.
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ from moderngl_window.scene import OrbitCamera
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-COMMON_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "terrain_gpu_runtime_common"))
-GPU_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "terrain_gpu_generator_plane"))
+COMMON_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "terrain_legacy_common"))
+SHADER_DIR = os.path.join(SCRIPT_DIR, "shaders")
 EXPORT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "exports", "terrain_generation"))
 if COMMON_DIR not in sys.path:
     sys.path.insert(0, COMMON_DIR)
@@ -30,14 +30,14 @@ from terrain_imgui import TerrainImguiPanel  # noqa: E402
 
 
 with open(
-    os.path.join(GPU_DIR, "shaders", "terrain_heightfield.vert"),
+    os.path.join(SHADER_DIR, "terrain_heightfield.vert"),
     "r",
     encoding="utf-8",
 ) as f:
     RENDER_VERTEX_SHADER = f.read()
 
 with open(
-    os.path.join(GPU_DIR, "shaders", "terrain_heightfield.frag"),
+    os.path.join(SHADER_DIR, "terrain_heightfield.frag"),
     "r",
     encoding="utf-8",
 ) as f:
