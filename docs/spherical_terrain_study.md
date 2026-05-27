@@ -234,6 +234,44 @@ frequency = 구면 방향 벡터를 noise lattice 안에서 얼마나 크게 확
 
 이 구조 덕분에 GPU의 각 draw vertex는 서로 독립적으로 height를 계산할 수 있다. 저장된 random texture나 random table이 없어도, 규칙과 seed가 같으면 같은 terrain이 재현된다.
 
+## 3D Cartesian Field와 구면 Surface의 결합
+
+현재 스피어 terrain은 노이즈 격자를 구면용으로 새로 정의하지 않는다. 노이즈 field 자체는 기존 3D Cartesian 공간을 그대로 사용한다.
+
+```text
+noise base grid:
+  3D Cartesian integer lattice
+  cell = floor(x, y, z)
+
+sample placement:
+  sphere surface
+  direction = normalize(x, y, z)
+
+height application:
+  radial normal direction
+  position = direction * (radius + height)
+```
+
+따라서 바뀐 것은 노이즈 격자가 아니라 샘플을 배치하는 표면이다. 평면 heightfield는 사각형 도메인의 `(x, y)`를 2D noise에 넣고, 나온 값을 수직 높이로 쓴다. 현재 스피어 terrain은 구면 표면 위의 점을 3D Cartesian 방향 벡터 `(x, y, z)`로 표현하고, 그 좌표를 3D noise field에 넣은 뒤, 나온 값을 구면의 radial normal 방향 높이로 쓴다.
+
+```text
+평면 heightfield:
+  sample domain = 2D plane
+  noise coordinate = (x, y)
+  height = noise2(x, y)
+  position = (x, height, y)
+
+스피어 terrain:
+  sample domain = sphere surface
+  noise coordinate = direction.xyz in 3D Cartesian field
+  height = noise3(direction.xyz)
+  position = direction * (radius + height)
+```
+
+이 관점에서 현재 방식은 2D와 3D의 결합으로 볼 수 있다. 샘플 도메인은 구면 표면이므로 2D manifold이고, 노이즈 field와 베이스 격자는 3D Cartesian 공간이다. 즉 3D 공간 전체에 존재하는 밀도 field를 구면 표면에서 읽고, 그 값을 구면 표면의 고도로 해석하는 방식이다.
+
+결론적으로 격자에 관한 부분은 기존 3D Cartesian 정수 격자를 사용한다. 구면 terrain의 특성은 그 격자가 바뀌어서 생기는 것이 아니라, 샘플 점들이 평면 격자가 아니라 구면 표면 위에 놓이고, height가 전역 up 방향이 아니라 radial normal 방향으로 적용되기 때문에 생긴다.
+
 ## fBm과 Octave
 
 구면에서도 fBm 구조는 평면과 같다.
