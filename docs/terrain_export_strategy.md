@@ -55,7 +55,7 @@ baked:
   grid_shape = [resolution, resolution]
 ```
 
-CPU 버전은 CPU에서 계산해 업로드한 VBO를 읽는다. GPU 버전은 transform feedback으로 구운 VBO를 읽는다.
+CPU 버전은 CPU에서 계산해 업로드한 VBO를 읽는다. GPU 버전은 transform feedback으로 구운 VBO를 읽는다. Transform feedback 자체의 의미는 [transform_feedback_pipeline.md](transform_feedback_pipeline.md)에 정리한다.
 
 ## 스피어 Terrain Export
 

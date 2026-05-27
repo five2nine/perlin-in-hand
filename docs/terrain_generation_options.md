@@ -149,6 +149,8 @@ Warped 레이어는 이 값을 켠 상태로 시작한다. 다른 레이어도 �
 - GPU 버전은 transform feedback으로 새 VBO를 다시 굽는다.
 - CPU 버전은 모든 높이와 노멀을 CPU에서 다시 계산해 VBO에 업로드한다.
 
+Transform feedback의 의미와 이 프로젝트의 다른 사용처는 [transform_feedback_pipeline.md](transform_feedback_pipeline.md)에 정리한다.
+
 CPU 버전에서는 높은 해상도와 많은 레이어를 함께 쓰면 조작 중 멈춘 것처럼 느껴질 수 있다. 이 경우 해상도를 낮추거나 레이어 수를 줄이는 편이 좋다.
 
 ### Palette

@@ -2,6 +2,8 @@
 
 This document outlines the technical design, performance comparison, and implementation strategy for executing the **Marching Cubes** algorithm entirely on the GPU using a Geometry Shader and Transform Feedback in ModernGL.
 
+Transform Feedback 자체의 의미와 다른 사용처와의 차이는 [transform_feedback_pipeline.md](transform_feedback_pipeline.md)에 정리한다.
+
 ---
 
 ## 1. Algorithm Overview

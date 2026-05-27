@@ -18,20 +18,18 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 
 ## 📂 프로젝트 구조 (Project Structure)
 
-### 1. CPU 높이장 구현
-* [main_perlin_2002_cpu.py](implementations/cpu_heightfield/main_perlin_2002_cpu.py): `perlin.Perlin`을 호출해 `(x, y, t)` 높이장을 계산하고 matplotlib 3D 표면으로 출력합니다.
-* [main_opensimplex_2014_cpu.py](implementations/cpu_heightfield/main_opensimplex_2014_cpu.py): `opensimplex` 라이브러리로 `(x, y, t)` 높이장을 계산하고 matplotlib 3D 표면으로 출력합니다.
+### 1. Heightfield CPU 구현
+* [main_perlin_my_cpu.py](implementations/heightfield_cpu/main_perlin_my_cpu.py): 2D Perlin의 gradient, dot product, fade 보간 절차를 직접 구현한 가장 기본적인 heightfield 설명용 스크립트입니다.
+* [main_perlin_2002_cpu.py](implementations/heightfield_cpu/main_perlin_2002_cpu.py): `perlin.Perlin` 라이브러리를 호출해 `(x, y, t)` heightfield를 계산하고 matplotlib 3D 표면으로 출력합니다.
+* [main_opensimplex_2014_cpu.py](implementations/heightfield_cpu/main_opensimplex_2014_cpu.py): `opensimplex` 라이브러리로 `(x, y, t)` heightfield를 계산하고 matplotlib 3D 표면으로 출력합니다.
 
-### 2. CPU 직접 Perlin 구현
-* [main_perlin_my_cpu.py](implementations/cpu_manual_perlin/main_perlin_my_cpu.py): 2D Perlin의 gradient, dot product, fade 보간 절차를 직접 구현한 설명용 스크립트입니다.
+### 2. Heightfield GPU 구현
+* [main_perlin_2002_gpu.py](implementations/heightfield_gpu/main_perlin_2002_gpu.py): GPU 셰이더에서 Perlin 높이장과 finite diff 법선을 계산합니다.
+* [main_opensimplex_2014_gpu.py](implementations/heightfield_gpu/main_opensimplex_2014_gpu.py): GPU 셰이더에서 OpenSimplex2 높이장과 해석적 법선을 계산합니다.
+* [shaders/perlin_2002.vert](implementations/heightfield_gpu/shaders/perlin_2002.vert): Perlin 높이장 버텍스 셰이더입니다.
+* [shaders/opensimplex_2014.vert](implementations/heightfield_gpu/shaders/opensimplex_2014.vert): OpenSimplex2 높이장 버텍스 셰이더입니다.
 
-### 3. GPU 높이장 구현
-* [main_perlin_2002_gpu.py](implementations/gpu_heightfield/main_perlin_2002_gpu.py): GPU 셰이더에서 Perlin 높이장과 finite diff 법선을 계산합니다.
-* [main_opensimplex_2014_gpu.py](implementations/gpu_heightfield/main_opensimplex_2014_gpu.py): GPU 셰이더에서 OpenSimplex2 높이장과 해석적 법선을 계산합니다.
-* [shaders/perlin_2002.vert](implementations/gpu_heightfield/shaders/perlin_2002.vert): Perlin 높이장 버텍스 셰이더입니다.
-* [shaders/opensimplex_2014.vert](implementations/gpu_heightfield/shaders/opensimplex_2014.vert): OpenSimplex2 높이장 버텍스 셰이더입니다.
-
-### 4. GPU 기반 정적 terrain toolchain
+### 3. GPU 기반 정적 terrain toolchain
 GPU terrain 관련 집합은 공통 런타임, 평면 제너레이터, 스피어 제너레이터, GPU 뷰어로 이름 구조를 맞춥니다.
 
 * [terrain_gpu_runtime_common](implementations/terrain_gpu_runtime_common): 레이어 모델, ImGui 패널, export/import 로더처럼 GPU terrain toolchain이 공유하는 런타임 모듈입니다.
@@ -39,7 +37,7 @@ GPU terrain 관련 집합은 공통 런타임, 평면 제너레이터, 스피어
 * [main_terrain_gpu_generator_sphere.py](implementations/terrain_gpu_generator_sphere/main_terrain_gpu_generator_sphere.py): icosphere 방향 벡터를 3D gradient noise에 넣어 구면 terrain을 생성하고, GPU compute shader로 subdivision과 레이어 높이를 계산하는 스피어 지형 생성기입니다.
 * [main_terrain_gpu_viewer.py](implementations/terrain_gpu_viewer/main_terrain_gpu_viewer.py): Export된 `.npz` 지형 메시를 제너레이터와 같은 ModernGL 렌더 셰이더로 보고, `Loaded Terrain` 패널에 파일 경로와 grid/triangle/height 같은 기본 사양을 표시하는 GPU 뷰어입니다.
 
-### 5. Legacy terrain 도구
+### 4. Legacy terrain 도구
 이 묶음은 GPU terrain toolchain에 섞지 않고 보관하는 legacy 구현입니다.
 
 * [terrain_legacy_common](implementations/terrain_legacy_common): legacy CPU 제너레이터와 legacy 뷰어가 공유하는 공통 모듈 사본입니다.
@@ -47,24 +45,21 @@ GPU terrain 관련 집합은 공통 런타임, 평면 제너레이터, 스피어
 * [main_terrain_legacy_viewer_matplotlib.py](implementations/terrain_legacy_viewer_matplotlib/main_terrain_legacy_viewer_matplotlib.py): Export된 `.npz` 지형 메시를 heightmap과 3D surface로 확인하는 legacy Matplotlib 뷰어입니다.
 * [main_terrain_legacy_viewer_pygame.py](implementations/terrain_legacy_viewer_pygame/main_terrain_legacy_viewer_pygame.py): Export된 `.npz` 지형 메시를 CPU에서 색상화한 2D heightmap으로 확인하는 legacy pygame-ce 뷰어입니다.
 
-### 6. GPU Marching Squares 구현
+### 5. GPU Marching Squares 구현
 * [main_simplex_2d_gpu_marching_squares.py](implementations/gpu_marching_squares/main_simplex_2d_gpu_marching_squares.py): 2D simplex 밀도장 `d = func(x, y, t)`에서 Marching Squares로 등고선 선분을 추출하고, 공통 파라미터 기반 필드 모드(Single/fBm/Ridged/Billow)를 전환합니다.
 * [shaders/marching_squares_tf.geom](implementations/gpu_marching_squares/shaders/marching_squares_tf.geom): transform feedback로 등고선 선분을 생성하는 geometry shader입니다.
 
-### 7. GPU Marching Cubes 구현
+### 6. GPU Marching Cubes 구현
 * [main_opensimplex_2014_gpu_4d.py](implementations/gpu_marching_cubes/main_opensimplex_2014_gpu_4d.py): 4D simplex 밀도장 `d = func(x, y, z, t)`에서 Marching Cubes로 3D 등가면을 추출합니다.
 * [marching_cubes_table.py](implementations/gpu_marching_cubes/marching_cubes_table.py): Marching Cubes 삼각화 테이블입니다.
 * [shaders/marching_cubes_tf.geom](implementations/gpu_marching_cubes/shaders/marching_cubes_tf.geom): transform feedback로 등가면 삼각형을 생성하는 geometry shader입니다.
 
-### 8. 기타 구현 자료
-* [gpu_voxel_instancing_legacy](implementations/gpu_voxel_instancing_legacy): Marching Cubes 이전의 복셀 인스턴싱 방식 셰이더 보관 폴더입니다.
-* [gpu_smoke_test/test_render.py](implementations/gpu_smoke_test/test_render.py): ModernGL 기본 렌더링 확인용 삼각형 테스트입니다.
-
-### 9. 기술 문서
+### 7. 기술 문서
 * [gui_architecture_qa.md](docs/gui_architecture_qa.md): 최적화(FPS, dt) 및 전문 GUI 연동 아키텍처 기술 Q&A 백서입니다.
 * [spherical_terrain_3d_noise.md](docs/spherical_terrain_3d_noise.md): 구면 terrain을 3D 노이즈 샘플링으로 만드는 새 케이스의 의도, 실행법, 관찰 기준입니다.
 * [spherical_terrain_study.md](docs/spherical_terrain_study.md): 평면 heightfield와 구면 terrain의 차이, 3D 방향 벡터 샘플링, icosphere, normal, 위도 밴드 통계를 설명하는 학습 노트입니다.
 * [camera_object_world_viewing.md](docs/camera_object_world_viewing.md): 3D 장면에서 카메라 이동, 물체 회전, 월드 기준, 조명 기준을 구분하는 학습 노트입니다.
+* [transform_feedback_pipeline.md](docs/transform_feedback_pipeline.md): transform feedback의 의미와 terrain bake, Marching Squares/Cubes, 삭제된 legacy voxel instancing 방식의 차이를 정리한 문서입니다.
 * [terrain_generation_options.md](docs/terrain_generation_options.md): 정적 지형 생성 유틸리티에서 선택할 수 있는 레이어 종류와 속성 옵션 설명입니다.
 * [terrain_imgui_widget.md](docs/terrain_imgui_widget.md): 정적 지형 생성 유틸리티의 ImGui 위젯 패널 구현 기록입니다.
 * [noise_complexity_comparison.md](docs/noise_complexity_comparison.md): 펄린 노이즈와 심플렉스 노이즈의 차원별 연산 절차 및 수학적 복잡도 분석 문서입니다.
@@ -82,14 +77,14 @@ GPU terrain 관련 집합은 공통 런타임, 평면 제너레이터, 스피어
 
 ### 실행 명령어
 
-#### 펄린 노이즈 (2002) 실행:
-* **CPU 버전**: `uv run .\implementations\cpu_heightfield\main_perlin_2002_cpu.py` (또는 `python .\implementations\cpu_heightfield\main_perlin_2002_cpu.py`)
-* **CPU 직접 구현**: `uv run .\implementations\cpu_manual_perlin\main_perlin_my_cpu.py` (또는 `python .\implementations\cpu_manual_perlin\main_perlin_my_cpu.py`)
-* **GPU 버전**: `uv run .\implementations\gpu_heightfield\main_perlin_2002_gpu.py` (또는 `python .\implementations\gpu_heightfield\main_perlin_2002_gpu.py`)
+#### Heightfield CPU 실행:
+* **Perlin 직접 구현**: `uv run .\implementations\heightfield_cpu\main_perlin_my_cpu.py` (또는 `python .\implementations\heightfield_cpu\main_perlin_my_cpu.py`)
+* **Perlin 2002 라이브러리**: `uv run .\implementations\heightfield_cpu\main_perlin_2002_cpu.py` (또는 `python .\implementations\heightfield_cpu\main_perlin_2002_cpu.py`)
+* **OpenSimplex 2014 라이브러리**: `uv run .\implementations\heightfield_cpu\main_opensimplex_2014_cpu.py` (또는 `python .\implementations\heightfield_cpu\main_opensimplex_2014_cpu.py`)
 
-#### 오픈심플렉스 노이즈 (2014) 실행:
-* **CPU 버전**: `uv run .\implementations\cpu_heightfield\main_opensimplex_2014_cpu.py` (또는 `python .\implementations\cpu_heightfield\main_opensimplex_2014_cpu.py`)
-* **GPU 높이장 버전**: `uv run .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py` (또는 `python .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py`)
+#### Heightfield GPU 실행:
+* **Perlin 2002 셰이더**: `uv run .\implementations\heightfield_gpu\main_perlin_2002_gpu.py` (또는 `python .\implementations\heightfield_gpu\main_perlin_2002_gpu.py`)
+* **OpenSimplex 2014 셰이더**: `uv run .\implementations\heightfield_gpu\main_opensimplex_2014_gpu.py` (또는 `python .\implementations\heightfield_gpu\main_opensimplex_2014_gpu.py`)
 
 #### GPU terrain toolchain 실행:
 * **평면 제너레이터**: `uv run .\implementations\terrain_gpu_generator_plane\main_terrain_gpu_generator_plane.py`

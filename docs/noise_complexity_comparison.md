@@ -38,9 +38,9 @@
 
 #### 2) 프로젝트 구현에서의 `grad`와 finite diff 구분
 
-이 프로젝트의 CPU Perlin 예제는 두 종류입니다. `implementations/cpu_manual_perlin/main_perlin_my_cpu.py`는 설명용 직접 구현이고, `implementations/cpu_heightfield/main_perlin_2002_cpu.py`는 외부 `perlin.Perlin` 구현을 호출합니다.
+이 프로젝트의 CPU Perlin 예제는 두 종류입니다. `implementations/heightfield_cpu/main_perlin_my_cpu.py`는 설명용 직접 구현이고, `implementations/heightfield_cpu/main_perlin_2002_cpu.py`는 외부 `perlin.Perlin` 구현을 호출합니다.
 
-`implementations/cpu_manual_perlin/main_perlin_my_cpu.py`의 직접 구현에서는 `grad`라는 함수명을 쓰지 않지만, 격자 꼭짓점마다 저장한 `random_angles`가 Perlin의 gradient 방향입니다. 각 꼭짓점의 gradient 벡터는 아래처럼 해석됩니다.
+`implementations/heightfield_cpu/main_perlin_my_cpu.py`의 직접 구현에서는 `grad`라는 함수명을 쓰지 않지만, 격자 꼭짓점마다 저장한 `random_angles`가 Perlin의 gradient 방향입니다. 각 꼭짓점의 gradient 벡터는 아래처럼 해석됩니다.
 
 ```text
 grad = (cos(angle), sin(angle))
@@ -50,7 +50,7 @@ contribution = dot(grad, offset)
 
 따라서 `dot_at_corner(ix, iy, px, py)`는 gradient 자체를 반환하는 함수가 아니라, 해당 꼭짓점의 gradient 벡터와 샘플점까지의 offset 벡터를 내적한 스칼라 기여값을 반환합니다. `n00`, `n10`, `n01`, `n11`은 네 꼭짓점의 기여값이고, 최종 노이즈 값은 이 네 값을 fade 곡선으로 보간한 결과입니다.
 
-`implementations/cpu_heightfield/main_perlin_2002_cpu.py`는 `generator.noise(x, y, t)`를 호출하므로 파일 내부에서 gradient를 직접 만들지 않습니다. gradient 해싱, 내적, 보간은 외부 `perlin.Perlin` 구현 내부에서 수행됩니다.
+`implementations/heightfield_cpu/main_perlin_2002_cpu.py`는 `generator.noise(x, y, t)`를 호출하므로 파일 내부에서 gradient를 직접 만들지 않습니다. gradient 해싱, 내적, 보간은 외부 `perlin.Perlin` 구현 내부에서 수행됩니다.
 
 finite diff는 위의 Perlin 내부 gradient와 다른 개념입니다. finite diff는 이미 계산된 높이 함수 $h(x,y)$의 변화율을 근사해 표면 법선을 구하는 방법입니다.
 
@@ -63,7 +63,7 @@ dh/dy ≈ (hy - h0) / eps
 normal ≈ normalize((-dh/dx, 1, -dh/dy))
 ```
 
-현재 CPU Perlin 파일들은 이 finite diff 법선을 직접 계산하지 않습니다. CPU 파일은 matplotlib의 `plot_surface`로 높이장을 그리는 데 집중합니다. 반면 GPU Perlin 셰이더 `implementations/gpu_heightfield/shaders/perlin_2002.vert`는 `h0`, `hx`, `hy`를 다시 샘플해 finite diff 법선을 계산합니다.
+현재 CPU Perlin 파일들은 이 finite diff 법선을 직접 계산하지 않습니다. CPU 파일은 matplotlib의 `plot_surface`로 높이장을 그리는 데 집중합니다. 반면 GPU Perlin 셰이더 `implementations/heightfield_gpu/shaders/perlin_2002.vert`는 `h0`, `hx`, `hy`를 다시 샘플해 finite diff 법선을 계산합니다.
 
 정리하면, CPU 직접 구현에는 Perlin 내부 gradient가 있으며 이는 `random_angles`와 `dot_at_corner`로 표현됩니다. CPU Perlin 호출 버전에는 gradient 계산이 외부 라이브러리 안에 있습니다. finite diff는 Perlin 값을 만든 뒤 렌더링 법선을 얻기 위한 별도 미분 근사이며, 현재 프로젝트에서는 GPU Perlin 셰이더에서 직접 사용됩니다.
 
