@@ -13,7 +13,7 @@ import pygame
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[1]
-COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_common"
+COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_gpu_runtime_common"
 if str(COMMON_DIR) not in sys.path:
     sys.path.insert(0, str(COMMON_DIR))
 

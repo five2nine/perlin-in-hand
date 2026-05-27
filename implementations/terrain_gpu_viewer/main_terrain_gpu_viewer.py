@@ -18,12 +18,12 @@ from moderngl_window.scene import OrbitCamera
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[1]
-GPU_TERRAIN_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_gpu"
-COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_common"
+GPU_TERRAIN_DIR = PROJECT_ROOT / "implementations" / "terrain_gpu_generator_plane"
+COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_gpu_runtime_common"
 if str(COMMON_DIR) not in sys.path:
     sys.path.insert(0, str(COMMON_DIR))
 
-from terrain_npz_loader import load_exported_mesh, newest_export  # noqa: E402
+from terrain_npz_loader import DEFAULT_EXPORT_DIR, load_exported_mesh, newest_export  # noqa: E402
 
 
 with open(
@@ -127,6 +127,36 @@ def parse_viewer_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
 VIEWER_ARGS, MGLW_ARGS = parse_viewer_args(sys.argv[1:])
 
 
+def list_exported_npz_files(current_path: Path | None = None) -> list[Path]:
+    search_dirs = [DEFAULT_EXPORT_DIR]
+    if current_path is not None:
+        search_dirs.append(Path(current_path).resolve().parent)
+
+    seen: set[Path] = set()
+    files: list[Path] = []
+    for directory in search_dirs:
+        if not directory.exists():
+            continue
+        for path in sorted(directory.glob("*.npz"), key=lambda item: item.stat().st_mtime, reverse=True):
+            resolved = path.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                files.append(resolved)
+
+    if current_path is not None:
+        resolved_current = Path(current_path).resolve()
+        if resolved_current.exists() and resolved_current not in seen:
+            files.insert(0, resolved_current)
+
+    app_exports = [
+        path
+        for path in files
+        if path.name.startswith(("terrain_cpu_", "terrain_gpu_", "terrain_sphere_"))
+    ]
+    other_exports = [path for path in files if path not in app_exports]
+    return app_exports + other_exports
+
+
 class TerrainNpzInfoPanel:
     def __init__(self, window: Any) -> None:
         imgui.create_context()
@@ -142,7 +172,7 @@ class TerrainNpzInfoPanel:
         self.renderer = ModernglWindowRenderer(window)
         self.io = imgui.get_io()
         self.panel_width = 430.0
-        self.panel_height = 260.0
+        self.panel_height = 440.0
 
     @property
     def wants_mouse(self) -> bool:
@@ -196,7 +226,7 @@ class TerrainNpzInfoPanel:
         )
         margin = 16.0
         self.panel_width = min(430.0, max(160.0, float(width) - margin * 2.0))
-        self.panel_height = min(280.0, max(140.0, float(height) - margin * 2.0))
+        self.panel_height = min(460.0, max(180.0, float(height) - margin * 2.0))
 
     def _set_mouse_pos(self, x: int, y: int) -> None:
         viewport_x = x - (
@@ -241,8 +271,51 @@ class TerrainNpzInfoPanel:
             imgui.text(f"Palette: {app.palette_names[app.palette]}")
             imgui.text(f"FPS: {app.fps_val:.1f}")
             imgui.separator()
+            self._draw_loading_menu(app)
+            imgui.separator()
             imgui.text("Mouse drag rotate | Wheel zoom | C palette | HOME reset")
         imgui.end()
+
+    def _draw_loading_menu(self, app: Any) -> None:
+        imgui.text("Load Model")
+        if not app.export_files:
+            imgui.text_wrapped("No exported .npz files found.")
+        else:
+            labels = [app.export_label(path) for path in app.export_files]
+            changed, selected = imgui.combo(
+                "Export##export_load_combo",
+                app.selected_export_index,
+                labels,
+            )
+            if changed:
+                app.selected_export_index = selected
+
+            if imgui.button("Load Selected"):
+                app.load_selected_export()
+            imgui.same_line()
+            if imgui.button("Reload"):
+                app.reload_current_export()
+
+            if imgui.button("Prev"):
+                app.load_export_delta(-1)
+            imgui.same_line()
+            if imgui.button("Next"):
+                app.load_export_delta(1)
+            imgui.same_line()
+            if imgui.button("Refresh"):
+                app.refresh_export_files()
+
+            _, app.use_file_palette_on_load = imgui.checkbox(
+                "Use file palette",
+                app.use_file_palette_on_load,
+            )
+            _, app.reset_camera_on_load = imgui.checkbox(
+                "Reset camera on load",
+                app.reset_camera_on_load,
+            )
+
+        if app.load_status:
+            imgui.text_wrapped(app.load_status)
 
 
 class GPUTerrainNpzViewerApp(mglw.WindowConfig):
@@ -255,12 +328,6 @@ class GPUTerrainNpzViewerApp(mglw.WindowConfig):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        self.export_path = Path(VIEWER_ARGS.path).resolve() if VIEWER_ARGS.path else newest_export()
-        self.mesh = load_exported_mesh(self.export_path)
-        self.metadata = self.mesh["metadata"]
-        self.rows = int(self.mesh["rows"])
-        self.cols = int(self.mesh["cols"])
 
         self.render_prog = self.ctx.program(
             vertex_shader=RENDER_VERTEX_SHADER,
@@ -279,26 +346,146 @@ class GPUTerrainNpzViewerApp(mglw.WindowConfig):
         self.camera.zoom_sensitivity = 0.05
 
         self.palette_names = ["Geology", "Topographic", "Ink"]
-        self.palette = self._initial_palette()
+        self.palette = self._palette_override() if VIEWER_ARGS.palette else 0
+        self.use_file_palette_on_load = VIEWER_ARGS.palette is None
+        self.reset_camera_on_load = False
         self.model_matrix = np.eye(4, dtype="f4")
         self.model_matrix_bytes = self.model_matrix.tobytes()
-
-        self.terrain_vbo = self.ctx.buffer(self.mesh["vertices"].tobytes())
-        self.ebo = self.ctx.buffer(self.mesh["indices"].astype("u4").tobytes())
-        self.render_vao = self.ctx.vertex_array(
-            self.render_prog,
-            [(self.terrain_vbo, "3f 3f 1f", "in_pos", "in_normal", "in_height")],
-            index_buffer=self.ebo,
-            index_element_size=4,
-        )
 
         self.fps_timer = 0.0
         self.frame_count = 0
         self.last_time = time.perf_counter()
         self.target_fps = 60
         self.fps_val = 0.0
+        self.export_files: list[Path] = []
+        self.selected_export_index = 0
+        self.load_status = ""
+        self.export_path = Path(VIEWER_ARGS.path).resolve() if VIEWER_ARGS.path else newest_export()
+        self.mesh: dict[str, Any] = {}
+        self.metadata: dict[str, Any] = {}
+        self.rows = 0
+        self.cols = 0
+        self.terrain_vbo: moderngl.Buffer | None = None
+        self.ebo: moderngl.Buffer | None = None
+        self.render_vao: moderngl.VertexArray | None = None
+
+        self.refresh_export_files(self.export_path)
+        self.load_export(self.export_path, apply_file_palette=True, reset_camera_view=False)
         self.ui = TerrainNpzInfoPanel(self.wnd)
 
+    def _palette_override(self) -> int:
+        return {"geology": 0, "topographic": 1, "ink": 2}[VIEWER_ARGS.palette]
+
+    def _palette_from_metadata(self, metadata: dict[str, Any]) -> int:
+        palette = str(metadata.get("palette", "Geology")).lower()
+        if palette.startswith("topo"):
+            return 1
+        if palette.startswith("ink"):
+            return 2
+        return 0
+
+    def refresh_export_files(self, selected_path: Path | None = None) -> None:
+        selected = Path(selected_path or self.export_path).resolve()
+        self.export_files = list_exported_npz_files(selected)
+        self.selected_export_index = 0
+        for index, path in enumerate(self.export_files):
+            if path == selected:
+                self.selected_export_index = index
+                break
+        self.load_status = f"Found {len(self.export_files)} export file(s)."
+
+    def export_label(self, path: Path) -> str:
+        try:
+            relative = path.relative_to(PROJECT_ROOT)
+            label = str(relative)
+        except ValueError:
+            label = str(path)
+        return label.replace("\\", "/")
+
+    def load_selected_export(self) -> None:
+        if not self.export_files:
+            self.load_status = "No export file is selected."
+            return
+        self.load_export(
+            self.export_files[self.selected_export_index],
+            apply_file_palette=self.use_file_palette_on_load,
+            reset_camera_view=self.reset_camera_on_load,
+        )
+
+    def reload_current_export(self) -> None:
+        self.load_export(
+            self.export_path,
+            apply_file_palette=self.use_file_palette_on_load,
+            reset_camera_view=False,
+        )
+
+    def load_export_delta(self, delta: int) -> None:
+        if not self.export_files:
+            self.load_status = "No export file is selected."
+            return
+        self.selected_export_index = (self.selected_export_index + delta) % len(self.export_files)
+        self.load_selected_export()
+
+    def load_export(
+        self,
+        path: Path | str,
+        *,
+        apply_file_palette: bool,
+        reset_camera_view: bool,
+    ) -> None:
+        terrain_path = Path(path).resolve()
+        new_vbo: moderngl.Buffer | None = None
+        new_ebo: moderngl.Buffer | None = None
+        new_vao: moderngl.VertexArray | None = None
+        try:
+            mesh = load_exported_mesh(terrain_path)
+            new_vbo = self.ctx.buffer(mesh["vertices"].tobytes())
+            new_ebo = self.ctx.buffer(mesh["indices"].astype("u4").tobytes())
+            new_vao = self.ctx.vertex_array(
+                self.render_prog,
+                [(new_vbo, "3f 3f 1f", "in_pos", "in_normal", "in_height")],
+                index_buffer=new_ebo,
+                index_element_size=4,
+            )
+        except Exception as exc:
+            for resource in (new_vao, new_vbo, new_ebo):
+                if resource is not None:
+                    resource.release()
+            self.load_status = f"Load failed: {exc}"
+            print(self.load_status)
+            if self.render_vao is None:
+                raise
+            return
+
+        old_vao = self.render_vao
+        old_vbo = self.terrain_vbo
+        old_ebo = self.ebo
+
+        self.export_path = terrain_path
+        self.mesh = mesh
+        self.metadata = mesh["metadata"]
+        self.rows = int(mesh["rows"])
+        self.cols = int(mesh["cols"])
+        self.terrain_vbo = new_vbo
+        self.ebo = new_ebo
+        self.render_vao = new_vao
+
+        for resource in (old_vao, old_vbo, old_ebo):
+            if resource is not None:
+                resource.release()
+
+        if VIEWER_ARGS.palette:
+            self.palette = self._palette_override()
+        elif apply_file_palette:
+            self.palette = self._palette_from_metadata(self.metadata)
+        if reset_camera_view:
+            self.reset_camera()
+
+        self.refresh_export_files(terrain_path)
+        self.load_status = f"Loaded {terrain_path.name}"
+        self._print_loaded_summary()
+
+    def _print_loaded_summary(self) -> None:
         print("=" * 72)
         print("GPU Terrain NPZ Viewer")
         print("-" * 72)
@@ -318,16 +505,6 @@ class GPUTerrainNpzViewerApp(mglw.WindowConfig):
         print("  C           : Cycle color palette")
         print("  HOME        : Reset camera")
         print("=" * 72)
-
-    def _initial_palette(self) -> int:
-        if VIEWER_ARGS.palette:
-            return {"geology": 0, "topographic": 1, "ink": 2}[VIEWER_ARGS.palette]
-        palette = str(self.metadata.get("palette", "Geology")).lower()
-        if palette.startswith("topo"):
-            return 1
-        if palette.startswith("ink"):
-            return 2
-        return 0
 
     def reset_camera(self) -> None:
         self.camera.radius = 1.55
@@ -371,13 +548,18 @@ class GPUTerrainNpzViewerApp(mglw.WindowConfig):
         if self.fps_timer >= 0.5:
             self.fps_val = self.frame_count / self.fps_timer
             self.wnd.title = (
-                f"GPU Terrain Viewer | {self.rows}x{self.cols} | "
+                f"GPU Terrain Viewer | {self.mesh_title_label()} | "
                 f"{self.palette_names[self.palette]} | FPS: {self.fps_val:.1f}"
             )
             self.fps_timer = 0.0
             self.frame_count = 0
 
         self.ui.render(self)
+
+    def mesh_title_label(self) -> str:
+        if self.metadata.get("generator_type") == "sphere_terrain":
+            return f"sphere {self.mesh['vertices'].shape[0]:,}v"
+        return f"{self.rows}x{self.cols}"
 
     def on_key_event(self, key, action, modifiers):
         self.ui.key_event(key, action, modifiers)

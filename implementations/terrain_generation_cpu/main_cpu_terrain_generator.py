@@ -14,8 +14,8 @@ from moderngl_window.scene import OrbitCamera
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-COMMON_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "terrain_generation_common"))
-GPU_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "terrain_generation_gpu"))
+COMMON_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "terrain_gpu_runtime_common"))
+GPU_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "terrain_gpu_generator_plane"))
 EXPORT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "exports", "terrain_generation"))
 if COMMON_DIR not in sys.path:
     sys.path.insert(0, COMMON_DIR)

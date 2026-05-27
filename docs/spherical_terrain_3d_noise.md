@@ -21,25 +21,25 @@ surface_position = direction * (radius + height)
 ## 실행
 
 ```powershell
-uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py
 ```
 
 창 없이 기본 통계만 확인할 때는 다음 명령을 사용한다.
 
 ```powershell
-uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --analyze-only
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py --analyze-only
 ```
 
 파라미터를 지정할 수 있다.
 
 ```powershell
-uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --subdivisions 6 --frequency 3.2 --amplitude 0.12 --octaves 5 --seed 41
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py --subdivisions 6 --frequency 3.2 --amplitude 0.12 --octaves 5 --seed 41
 ```
 
 정지 상태의 GPU 사용량을 낮추기 위해 기본 렌더링 cap은 입력 중 60FPS, idle 상태 12FPS다. 필요하면 다음처럼 조절한다.
 
 ```powershell
-uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --active-fps 60 --idle-fps 8
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py --active-fps 60 --idle-fps 8
 ```
 
 ## 구현 구조

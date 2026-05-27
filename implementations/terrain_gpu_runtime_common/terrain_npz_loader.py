@@ -20,7 +20,7 @@ def newest_export(export_dir: Path | str = DEFAULT_EXPORT_DIR) -> Path:
     app_exports = [
         path
         for path in files
-        if path.name.startswith(("terrain_cpu_", "terrain_gpu_"))
+        if path.name.startswith(("terrain_cpu_", "terrain_gpu_", "terrain_sphere_"))
     ]
     return (app_exports or files)[-1]
 

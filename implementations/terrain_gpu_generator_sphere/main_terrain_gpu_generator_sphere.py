@@ -19,9 +19,9 @@ from moderngl_window.scene import OrbitCamera
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[1]
-SHADER_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_gpu" / "shaders"
+SHADER_DIR = PROJECT_ROOT / "implementations" / "terrain_gpu_generator_plane" / "shaders"
 SPHERE_SHADER_DIR = SCRIPT_DIR / "shaders"
-COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_common"
+COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_gpu_runtime_common"
 EXPORT_DIR = PROJECT_ROOT / "exports" / "terrain_generation"
 DEFAULT_SUBDIVISIONS = 6
 MAX_SUBDIVISIONS = 8

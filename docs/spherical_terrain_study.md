@@ -151,19 +151,19 @@ ModernGL 창은 카메라가 멈춰 있어도 렌더 루프를 계속 돈다. �
 코드 위치:
 
 ```text
-implementations/terrain_sphere_3d_noise/main_spherical_terrain_3d_noise.py
+implementations/terrain_gpu_generator_sphere/main_terrain_gpu_generator_sphere.py
 ```
 
 실행:
 
 ```powershell
-uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py
 ```
 
 통계만 출력:
 
 ```powershell
-uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --analyze-only
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py --analyze-only
 ```
 
 ## 위도 밴드 통계 읽기
@@ -467,7 +467,7 @@ idle-fps = 움직임이 없을 때 cap
 명령행에서 조절할 수 있다.
 
 ```powershell
-uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --active-fps 60 --idle-fps 8
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py --active-fps 60 --idle-fps 8
 ```
 
 ### Q. Tessellation shader와 compute shader는 무엇이 다른가?

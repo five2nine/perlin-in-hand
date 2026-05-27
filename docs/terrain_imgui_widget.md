@@ -8,9 +8,9 @@
 
 ## 적용 대상
 
-- `implementations/terrain_generation_gpu/main_gpu_terrain_generator.py`
+- `implementations/terrain_gpu_generator_plane/main_terrain_gpu_generator_plane.py`
 - `implementations/terrain_generation_cpu/main_cpu_terrain_generator.py`
-- `implementations/terrain_generation_common/terrain_imgui.py`
+- `implementations/terrain_gpu_runtime_common/terrain_imgui.py`
 
 ## 패널 구성
 
