@@ -41,21 +41,26 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * [main_pygame_terrain_npz_viewer.py](implementations/terrain_npz_viewer_pygame/main_pygame_terrain_npz_viewer.py): Export된 `.npz` 지형 메시를 CPU에서 색상화한 2D heightmap으로 빠르게 확인하는 pygame-ce 뷰어입니다.
 * [main_gpu_terrain_npz_viewer.py](implementations/terrain_npz_viewer_gpu/main_gpu_terrain_npz_viewer.py): Export된 `.npz` 지형 메시를 제너레이터와 같은 ModernGL 렌더 셰이더로 보고, `Loaded Terrain` 패널에 파일 경로와 grid/triangle/height 같은 기본 사양을 표시하는 GPU 뷰어입니다.
 
-### 5. GPU Marching Squares 구현
+### 5. 구면 지형 3D 노이즈 케이스
+* [main_spherical_terrain_3d_noise.py](implementations/terrain_sphere_3d_noise/main_spherical_terrain_3d_noise.py): icosphere 방향 벡터를 3D gradient noise에 넣어 구면 terrain을 생성하고, 위도 밴드별 통계로 극점/적도 특성을 확인하는 ModernGL 케이스입니다.
+
+### 6. GPU Marching Squares 구현
 * [main_simplex_2d_gpu_marching_squares.py](implementations/gpu_marching_squares/main_simplex_2d_gpu_marching_squares.py): 2D simplex 밀도장 `d = func(x, y, t)`에서 Marching Squares로 등고선 선분을 추출하고, 공통 파라미터 기반 필드 모드(Single/fBm/Ridged/Billow)를 전환합니다.
 * [shaders/marching_squares_tf.geom](implementations/gpu_marching_squares/shaders/marching_squares_tf.geom): transform feedback로 등고선 선분을 생성하는 geometry shader입니다.
 
-### 6. GPU Marching Cubes 구현
+### 7. GPU Marching Cubes 구현
 * [main_opensimplex_2014_gpu_4d.py](implementations/gpu_marching_cubes/main_opensimplex_2014_gpu_4d.py): 4D simplex 밀도장 `d = func(x, y, z, t)`에서 Marching Cubes로 3D 등가면을 추출합니다.
 * [marching_cubes_table.py](implementations/gpu_marching_cubes/marching_cubes_table.py): Marching Cubes 삼각화 테이블입니다.
 * [shaders/marching_cubes_tf.geom](implementations/gpu_marching_cubes/shaders/marching_cubes_tf.geom): transform feedback로 등가면 삼각형을 생성하는 geometry shader입니다.
 
-### 7. 기타 구현 자료
+### 8. 기타 구현 자료
 * [gpu_voxel_instancing_legacy](implementations/gpu_voxel_instancing_legacy): Marching Cubes 이전의 복셀 인스턴싱 방식 셰이더 보관 폴더입니다.
 * [gpu_smoke_test/test_render.py](implementations/gpu_smoke_test/test_render.py): ModernGL 기본 렌더링 확인용 삼각형 테스트입니다.
 
-### 8. 기술 문서
+### 9. 기술 문서
 * [gui_architecture_qa.md](docs/gui_architecture_qa.md): 최적화(FPS, dt) 및 전문 GUI 연동 아키텍처 기술 Q&A 백서입니다.
+* [spherical_terrain_3d_noise.md](docs/spherical_terrain_3d_noise.md): 구면 terrain을 3D 노이즈 샘플링으로 만드는 새 케이스의 의도, 실행법, 관찰 기준입니다.
+* [spherical_terrain_study.md](docs/spherical_terrain_study.md): 평면 heightfield와 구면 terrain의 차이, 3D 방향 벡터 샘플링, icosphere, normal, 위도 밴드 통계를 설명하는 학습 노트입니다.
 * [terrain_generation_options.md](docs/terrain_generation_options.md): 정적 지형 생성 유틸리티에서 선택할 수 있는 레이어 종류와 속성 옵션 설명입니다.
 * [terrain_imgui_widget.md](docs/terrain_imgui_widget.md): 정적 지형 생성 유틸리티의 ImGui 위젯 패널 구현 기록입니다.
 * [noise_complexity_comparison.md](docs/noise_complexity_comparison.md): 펄린 노이즈와 심플렉스 노이즈의 차원별 연산 절차 및 수학적 복잡도 분석 문서입니다.
@@ -88,6 +93,8 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * **Matplotlib Export 뷰어**: `uv run .\implementations\terrain_npz_viewer_matplotlib\main_matplotlib_terrain_npz_viewer.py`
 * **pygame-ce CPU Export 뷰어**: `uv run .\implementations\terrain_npz_viewer_pygame\main_pygame_terrain_npz_viewer.py`
 * **GPU Export 뷰어**: `uv run .\implementations\terrain_npz_viewer_gpu\main_gpu_terrain_npz_viewer.py`
+* **구면 3D 노이즈 케이스**: `uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py`
+* **구면 3D 노이즈 통계 출력**: `uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --analyze-only`
 
 #### 등가집합 추출 실행:
 * **GPU Marching Squares 버전**: `uv run .\implementations\gpu_marching_squares\main_simplex_2d_gpu_marching_squares.py` (또는 `python .\implementations\gpu_marching_squares\main_simplex_2d_gpu_marching_squares.py`)

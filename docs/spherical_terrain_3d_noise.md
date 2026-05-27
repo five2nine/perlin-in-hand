@@ -1,0 +1,87 @@
+# 구면 Terrain 3D 노이즈 샘플링 케이스
+
+## 목적
+
+구면 terrain에서 위도/경도 UV 샘플링을 쓰지 않고, 구면 위의 방향 벡터를 3D noise field에 직접 넣었을 때 적도와 극점의 특성이 어떻게 나타나는지 확인한다.
+
+개념을 공부하기 위한 설명은 [spherical_terrain_study.md](spherical_terrain_study.md)에 정리한다. 이 문서는 실행법과 관찰 기준을 중심으로 둔다.
+
+핵심 샘플링 식은 다음과 같다.
+
+```text
+direction = normalize(vertex_position)
+height = fBmNoise3D(direction * frequency + seed)
+surface_position = direction * (radius + height)
+```
+
+이 방식은 북극/남극을 특별한 좌표점으로 만들지 않는다. 극점은 위도/경도 좌표계의 특이점이고, 3D 방향 벡터 샘플링에서는 모든 표면점이 같은 3D noise field의 단면을 읽는다.
+
+## 실행
+
+```powershell
+uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py
+```
+
+창 없이 기본 통계만 확인할 때는 다음 명령을 사용한다.
+
+```powershell
+uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --analyze-only
+```
+
+파라미터를 지정할 수 있다.
+
+```powershell
+uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --subdivisions 5 --frequency 3.2 --amplitude 0.12 --octaves 5 --seed 41
+```
+
+## 구현 구조
+
+- 베이스 메쉬는 위도/경도 격자가 아니라 `icosphere`다.
+- `subdivisions`가 높아질수록 삼각형 수와 vertex 수가 증가한다.
+- 각 vertex의 정규화 방향 벡터를 3D gradient noise 입력으로 사용한다.
+- fBm은 여러 octave의 3D noise를 더해 만든다.
+- 높이 변위는 radial displacement로 적용한다.
+- 렌더링은 기존 지형 렌더 셰이더 `terrain_heightfield.vert/frag`를 재사용한다.
+
+## 패널 정보
+
+ModernGL 창의 ImGui 패널은 다음 항목을 표시한다.
+
+- subdivisions
+- frequency
+- amplitude
+- octaves
+- seed
+- vertex 수
+- triangle 수
+- height 범위
+- 위도 밴드별 count, mean, standard deviation
+
+위도 밴드는 다음 다섯 구간이다.
+
+- south polar: -90도 .. -60도
+- south mid: -60도 .. -30도
+- equatorial: -30도 .. 30도
+- north mid: 30도 .. 60도
+- north polar: 60도 .. 90도
+
+## 관찰 기준
+
+3D 방향 벡터 샘플링은 UV 극점 압축을 만들지 않는다. 따라서 적도와 극점의 차이는 좌표 매핑 문제라기보다 다음 요인에서 나온다.
+
+- 유한한 vertex 수 때문에 밴드별 표본 수가 다르다.
+- 한 seed의 noise 결과는 무작위 실현 하나이므로 밴드별 mean과 standard deviation이 완전히 같지는 않다.
+- 현재 3D noise는 내부적으로 정수 cubic lattice hash를 쓰므로 아주 낮은 frequency나 특정 seed에서 약한 축 방향 artifact가 보일 수 있다.
+- icosphere도 완전 균일한 면적 분포는 아니므로 밴드 통계에는 작은 샘플링 차이가 남는다.
+
+기본값에서 `--analyze-only` 출력은 위도 밴드별 표준편차가 큰 차이 없이 비슷한 범위에 놓이는지 확인하기 위한 첫 기준이다. 극점 쪽에서 일관된 압축이나 늘어남이 보이는지 확인하려면 seed와 frequency를 바꿔 여러 번 비교한다.
+
+## 조작
+
+- 마우스 드래그: 카메라 회전
+- 마우스 휠: 줌
+- `C`: 팔레트 전환
+- `W`: 와이어프레임 전환
+- `HOME`: 카메라 초기화
+
+패널 위에서 마우스를 조작하면 카메라 회전/줌과 충돌하지 않는다.
