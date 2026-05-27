@@ -7,7 +7,7 @@ from typing import Any
 import imgui
 from moderngl_window.integrations.imgui import ModernglWindowRenderer
 
-from terrain_layers import LayerKind
+from terrain_layers import MAX_OCTAVES, LayerKind
 
 
 class TerrainImguiPanel:
@@ -242,7 +242,13 @@ class TerrainImguiPanel:
         if changed:
             app.set_layer_enabled(app.selected_layer, bool(enabled))
 
-        changed, octaves = imgui.slider_int("Octaves", int(layer.octaves), 1, 3, format="%d")
+        changed, octaves = imgui.slider_int(
+            "Octaves",
+            int(layer.octaves),
+            1,
+            MAX_OCTAVES,
+            format="%d",
+        )
         if changed:
             layer.octaves = int(octaves)
             app.upload_terrain_stack()

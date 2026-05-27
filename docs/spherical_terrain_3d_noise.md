@@ -12,7 +12,7 @@ GPU에서 terrain 샘플 생성을 처리하기 위한 선택지, 특히 tessell
 
 ```text
 direction = normalize(vertex_position)
-height = fBmNoise3D(direction * frequency + seed)
+height = sum(layer_noise3D(direction, layer_params))
 surface_position = direction * (radius + height)
 ```
 
@@ -51,11 +51,13 @@ uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise
 - compute shader가 정이십면체의 20개 base triangle을 `2^subdivisions` 격자로 직접 펼친다.
 - compute shader가 subdivision, height, displaced position, normal을 한 번에 terrain vertex buffer에 쓴다.
 - 현재 GPU subdivision은 index buffer를 만들지 않고 non-indexed triangle list를 생성한다. 따라서 논리적 공유 vertex 수보다 실제 draw vertex 수가 크다.
-- UI에서 frequency, amplitude, octave, seed를 바꾸면 같은 buffer 크기에서 compute shader만 다시 dispatch한다.
+- 평면 terrain generator와 같은 레이어 스택 개념을 사용한다. `Simple`, `fBm`, `Ridged`, `Billow`, `Valley`, `Warped` 레이어를 enabled 상태에 따라 누적한다.
+- UI에서 레이어를 추가, 삭제, enable/disable하거나 frequency, amplitude, octave, persistence, lacunarity, valley_power, warp_strength, warp_frequency를 바꾸면 같은 buffer 크기에서 compute shader만 다시 dispatch한다.
+- 선택 레이어의 octaves는 최대 6까지 조정할 수 있다. Random 프리셋은 기본 관찰이 너무 촘촘해지지 않도록 1~3 octave 범위에서 시작한다.
 - UI에서 subdivisions를 바꾸면 draw vertex 수가 바뀌므로 terrain vertex buffer를 다시 잡고 compute shader를 dispatch한다.
 - 정확한 height 범위와 위도 밴드 통계는 GPU buffer readback이 필요하므로 `Read GPU Stats` 버튼으로 요청할 때만 읽는다.
 - 각 vertex의 정규화 방향 벡터를 3D gradient noise 입력으로 사용한다.
-- fBm은 여러 octave의 3D noise를 더해 만든다.
+- 각 레이어 내부에서 fBm은 여러 octave의 3D noise를 더해 만든다.
 - 높이 변위는 radial displacement로 적용한다.
 - terrain vertex는 seed가 아니라 노이즈 샘플 위치다. 현재 노이즈의 베이스 그리드는 terrain mesh가 아니라 3D XYZ 노이즈 공간의 정수 cubic lattice다.
 - random gradient는 저장된 배열이 아니라 정수 lattice 좌표와 seed를 hash해서 즉석 생성한다.
@@ -66,10 +68,9 @@ uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise
 ModernGL 창의 ImGui 패널은 다음 항목을 표시한다.
 
 - subdivisions
-- frequency
-- amplitude
-- octaves
-- seed
+- 레이어 추가 버튼: Random, 1 Oct, 2 Oct, 3 Oct, Valley, Billow, Ridged, Warped
+- 레이어 목록: 선택, enabled, 삭제
+- 선택 레이어 속성: frequency, amplitude, octaves(1~6), persistence, lacunarity, valley_power, warp_strength, warp_frequency
 - logical vertex 수
 - draw vertex 수
 - triangle 수

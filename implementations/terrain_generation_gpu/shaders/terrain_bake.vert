@@ -16,7 +16,7 @@ out vec3 out_normal;
 out float out_height;
 
 const int MAX_LAYERS = 16;
-const int MAX_OCTAVES = 3;
+const int MAX_OCTAVES = 6;
 const float PI2 = 6.28318530718;
 
 float hash12(vec2 p) {

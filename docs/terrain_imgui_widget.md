@@ -35,7 +35,7 @@ CPU/GPU 지형 창은 `WindowConfig.aspect_ratio = None`으로 fixed viewport를
 
 `TerrainImguiPanel`은 렌더링 직전에 현재 `window.size`와 `window.buffer_size`를 다시 읽어 `io.display_size`와 `io.display_fb_scale`을 갱신한다. 패널 위치와 크기는 첫 실행 때만 기본값을 제안하고, 이후에는 ImGui의 이동/크기 변경/접기 상태를 유지한다. 창이 작아지면 새로 만드는 첫 패널의 기본 폭/높이와 레이어 목록 높이만 줄인다.
 
-레이어 추가 버튼은 작은 프리셋 묶음으로 유지한다. `Random`은 레이어 종류, 옥타브, 나머지 속성을 모두 랜덤으로 만든다. `1/2/3 Oct`는 Simple 레이어의 옥타브만 고정하고 나머지 속성은 랜덤으로 만든다. Valley, Billow, Ridged, Warped 버튼은 해당 레이어 종류를 학습용 프리셋처럼 빠르게 추가하고, 옥타브와 세부 속성은 랜덤으로 둔다. 세부 조정은 선택 레이어 편집 영역에서 한다.
+레이어 추가 버튼은 작은 프리셋 묶음으로 유지한다. `Random`은 레이어 종류, 옥타브, 나머지 속성을 랜덤으로 만든다. 랜덤 시작값은 과한 디테일을 피하기 위해 1~3 octave 범위를 쓴다. `1/2/3 Oct`는 Simple 레이어의 옥타브만 고정하고 나머지 속성은 랜덤으로 만든다. Valley, Billow, Ridged, Warped 버튼은 해당 레이어 종류를 학습용 프리셋처럼 빠르게 추가하고, 옥타브와 세부 속성은 랜덤으로 둔다. 세부 조정은 선택 레이어 편집 영역에서 하며, Octaves 슬라이더는 최대 6까지 열려 있다.
 
 ## 이벤트 처리
 

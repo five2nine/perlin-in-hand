@@ -4,6 +4,7 @@ import argparse
 from dataclasses import dataclass
 import math
 from pathlib import Path
+import random
 import sys
 import time
 from typing import Any
@@ -20,10 +21,16 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[1]
 SHADER_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_gpu" / "shaders"
 SPHERE_SHADER_DIR = SCRIPT_DIR / "shaders"
+COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_common"
 DEFAULT_SUBDIVISIONS = 6
 MAX_SUBDIVISIONS = 8
 DEFAULT_ACTIVE_FPS = 60
 DEFAULT_IDLE_FPS = 12
+
+if str(COMMON_DIR) not in sys.path:
+    sys.path.insert(0, str(COMMON_DIR))
+
+from terrain_layers import MAX_OCTAVES, LayerKind, TerrainLayer, TerrainStack  # noqa: E402
 
 with open(SHADER_DIR / "terrain_heightfield.vert", "r", encoding="utf-8") as f:
     RENDER_VERTEX_SHADER = f.read()
@@ -152,6 +159,24 @@ def _parse_case_value(option: str, value: str) -> int | float:
 
 
 CASE_ARGS, MGLW_ARGS = parse_case_args(sys.argv[1:])
+
+
+def make_initial_sphere_stack() -> TerrainStack:
+    return TerrainStack(
+        [
+            TerrainLayer(
+                kind=LayerKind.SIMPLE,
+                octaves=CASE_ARGS.octaves,
+                frequency=CASE_ARGS.frequency,
+                amplitude=CASE_ARGS.amplitude,
+                persistence=0.52,
+                lacunarity=2.03,
+                seed_x=CASE_ARGS.seed * 0.11,
+                seed_y=CASE_ARGS.seed * -0.07,
+                rotation=0.0,
+            )
+        ]
+    )
 
 
 def _normalize(vectors: np.ndarray) -> np.ndarray:
@@ -460,6 +485,7 @@ class SphereTerrainPanel:
         self.io = imgui.get_io()
         self.panel_width = 420.0
         self.panel_height = 560.0
+        self.layer_stack_height = 150.0
 
     @property
     def wants_mouse(self) -> bool:
@@ -513,7 +539,8 @@ class SphereTerrainPanel:
         )
         margin = 16.0
         self.panel_width = min(420.0, max(160.0, float(width) - margin * 2.0))
-        self.panel_height = min(620.0, max(180.0, float(height) - margin * 2.0))
+        self.panel_height = min(760.0, max(180.0, float(height) - margin * 2.0))
+        self.layer_stack_height = max(72.0, min(170.0, self.panel_height - 550.0))
 
     def _set_mouse_pos(self, x: int, y: int) -> None:
         viewport_x = x - (
@@ -550,56 +577,14 @@ class SphereTerrainPanel:
             imgui.text(f"Compute: {app.last_build_ms:.2f} ms")
             imgui.separator()
 
-            changed = False
             changed_subdivisions, subdivisions = imgui.slider_int(
                 "Subdivisions",
                 app.config.subdivisions,
                 1,
                 MAX_SUBDIVISIONS,
             )
-            changed_frequency, frequency = imgui.slider_float(
-                "Frequency",
-                app.config.frequency,
-                0.5,
-                14.0,
-                format="%.2f",
-            )
-            changed_amplitude, amplitude = imgui.slider_float(
-                "Amplitude",
-                app.config.amplitude,
-                0.0,
-                0.35,
-                format="%.3f",
-            )
-            changed_octaves, octaves = imgui.slider_int("Octaves", app.config.octaves, 1, 6)
-            changed_seed, seed = imgui.slider_float(
-                "Seed",
-                app.config.seed,
-                -200.0,
-                200.0,
-                format="%.2f",
-            )
-            changed = any(
-                [
-                    changed_subdivisions,
-                    changed_frequency,
-                    changed_amplitude,
-                    changed_octaves,
-                    changed_seed,
-                ]
-            )
-            if changed:
-                app.apply_config(
-                    SphereTerrainConfig(
-                        subdivisions=int(subdivisions),
-                        frequency=float(frequency),
-                        amplitude=float(amplitude),
-                        octaves=int(octaves),
-                        seed=float(seed),
-                        persistence=app.config.persistence,
-                        lacunarity=app.config.lacunarity,
-                    )
-                )
+            if changed_subdivisions:
+                app.set_subdivisions(int(subdivisions))
 
             changed_palette, palette = imgui.combo(
                 "Palette",
@@ -615,9 +600,18 @@ class SphereTerrainPanel:
                 app.wireframe = wireframe
                 app.mark_active()
 
+            if imgui.button("Reset Terrain"):
+                app.reset_terrain()
+            imgui.same_line()
             if imgui.button("Reset Camera"):
                 app.reset_camera()
 
+            imgui.separator()
+            self._draw_add_buttons(app)
+            imgui.separator()
+            self._draw_layer_list(app)
+            imgui.separator()
+            self._draw_selected_layer_editor(app)
             imgui.separator()
             imgui.text(f"Logical vertices: {app.mesh['logical_vertices']:,}")
             imgui.text(f"Draw vertices: {app.mesh['draw_vertices']:,}")
@@ -643,9 +637,121 @@ class SphereTerrainPanel:
             else:
                 imgui.text("Press Read GPU Stats for exact band values")
             imgui.separator()
-            imgui.text("Mouse drag rotate | Wheel zoom | C palette | W wire")
+            imgui.text("Mouse drag rotate | Wheel zoom | C palette | F wire")
         imgui.end()
         self._draw_orientation_gizmo(app)
+
+    def _draw_add_buttons(self, app: Any) -> None:
+        imgui.text(f"Layers: {len(app.stack.layers)} / 16")
+
+        if imgui.button("Random"):
+            app.add_random_layer()
+        imgui.same_line()
+        if imgui.button("1 Oct"):
+            app.add_random_layer(force_kind=LayerKind.SIMPLE, octaves=1)
+        imgui.same_line()
+        if imgui.button("2 Oct"):
+            app.add_random_layer(force_kind=LayerKind.SIMPLE, octaves=2)
+        imgui.same_line()
+        if imgui.button("3 Oct"):
+            app.add_random_layer(force_kind=LayerKind.SIMPLE, octaves=3)
+
+        if imgui.button("Valley"):
+            app.add_random_layer(force_kind=LayerKind.VALLEY)
+        imgui.same_line()
+        if imgui.button("Billow"):
+            app.add_random_layer(force_kind=LayerKind.BILLOW)
+        imgui.same_line()
+        if imgui.button("Ridged"):
+            app.add_random_layer(force_kind=LayerKind.RIDGED)
+        imgui.same_line()
+        if imgui.button("Warped"):
+            app.add_random_layer(force_kind=LayerKind.WARPED)
+
+    def _draw_layer_list(self, app: Any) -> None:
+        imgui.text("Layer Stack")
+        imgui.begin_child("sphere-layer-stack", height=self.layer_stack_height, border=True)
+
+        pending_delete: int | None = None
+        select_width = max(80.0, imgui.get_content_region_available_width() - 58.0)
+        for index, layer in enumerate(app.stack.layers):
+            imgui.push_id(str(index))
+
+            changed, enabled = imgui.checkbox("##enabled", layer.enabled)
+            if changed:
+                app.set_layer_enabled(index, bool(enabled))
+
+            imgui.same_line()
+            clicked, _ = imgui.selectable(
+                f"{index:02d} {layer.summary()}",
+                selected=index == app.selected_layer,
+                width=select_width,
+            )
+            if clicked:
+                app.selected_layer = index
+
+            imgui.same_line()
+            if imgui.small_button("Del"):
+                pending_delete = index
+
+            imgui.pop_id()
+
+        imgui.end_child()
+
+        if pending_delete is not None:
+            app.remove_layer(pending_delete)
+
+    def _draw_selected_layer_editor(self, app: Any) -> None:
+        layer = app.selected()
+        if layer is None:
+            imgui.text("No selected layer")
+            return
+
+        imgui.text(f"Selected: {app.selected_layer:02d} {layer.name}")
+
+        changed, enabled = imgui.checkbox("Enabled", layer.enabled)
+        if changed:
+            app.set_layer_enabled(app.selected_layer, bool(enabled))
+
+        changed, octaves = imgui.slider_int(
+            "Octaves",
+            int(layer.octaves),
+            1,
+            MAX_OCTAVES,
+            format="%d",
+        )
+        if changed:
+            layer.octaves = int(octaves)
+            app.upload_terrain_stack()
+
+        self._slider_float(app, layer, "Frequency", "frequency", 0.25, 64.0, "%.2f")
+        self._slider_float(app, layer, "Amplitude", "amplitude", 0.0, 0.35, "%.3f")
+        self._slider_float(app, layer, "Persistence", "persistence", 0.1, 0.9, "%.2f")
+        self._slider_float(app, layer, "Lacunarity", "lacunarity", 1.1, 3.5, "%.2f")
+        self._slider_float(app, layer, "Valley Power", "valley_power", 0.5, 5.0, "%.2f")
+        self._slider_float(app, layer, "Warp Strength", "warp_strength", 0.0, 0.2, "%.3f")
+        self._slider_float(app, layer, "Warp Frequency", "warp_frequency", 0.5, 16.0, "%.2f")
+
+    def _slider_float(
+        self,
+        app: Any,
+        layer: Any,
+        label: str,
+        attr: str,
+        minimum: float,
+        maximum: float,
+        fmt: str,
+    ) -> None:
+        changed, value = imgui.slider_float(
+            label,
+            float(getattr(layer, attr)),
+            minimum,
+            maximum,
+            format=fmt,
+        )
+        if changed:
+            setattr(layer, attr, float(value))
+            app.upload_terrain_stack()
 
     def _draw_orientation_gizmo(self, app: Any) -> None:
         width, _height = self.window.size
@@ -816,6 +922,9 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
             octaves=CASE_ARGS.octaves,
             seed=CASE_ARGS.seed,
         )
+        self.rng = random.Random(9107)
+        self.stack = make_initial_sphere_stack()
+        self.selected_layer = 0
         self.palette_names = ["Geology", "Topographic", "Ink"]
         self.palette = 1
         self.wireframe = False
@@ -841,26 +950,76 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         print("=" * 72)
         print("Spherical Terrain - 3D Noise Sampling")
         print("-" * 72)
-        print("Terrain build: GPU compute shader for subdivision, height, position, and normals")
-        print("Controls: mouse drag rotate, wheel zoom, C palette, W wireframe, HOME reset")
+        print("Terrain build: GPU compute shader for subdivision, layer stack, position, and normals")
+        print("Controls: A random, 1/2/3 simple, V/B/G/W layer kinds, E enable, DEL remove")
+        print("          mouse drag rotate, wheel zoom, C palette, F wireframe, HOME reset")
         print(f"Frame cap: active={self.active_fps} fps, idle={self.idle_fps} fps")
         print("Use --analyze-only to print latitude-band statistics without opening a window.")
         print("=" * 72)
 
+    def _get_uniform(self, program: Any, name: str) -> Any:
+        for candidate in (name, f"{name}[0]"):
+            try:
+                return program[candidate]
+            except KeyError:
+                continue
+        return None
+
+    def _set_uniform_value(self, program: Any, name: str, value: Any) -> None:
+        uniform = self._get_uniform(program, name)
+        if uniform is not None:
+            uniform.value = value
+
+    def _normal_step(self) -> float:
+        finest = 1.0
+        for layer in self.stack.layers:
+            if not layer.enabled:
+                continue
+            octave_frequency = layer.frequency * (layer.lacunarity ** max(layer.octaves - 1, 0))
+            finest = max(finest, octave_frequency, layer.warp_frequency)
+        return max(0.001, min(0.015, 0.35 / max(finest, 1.0)))
+
     def _set_compute_uniforms(self) -> None:
         self.compute_prog["u_draw_vertex_count"].value = int(self.mesh["draw_vertices"])
         self.compute_prog["u_subdivision_steps"].value = int(self.mesh["subdivision_steps"])
-        self.compute_prog["u_octaves"].value = int(self.config.octaves)
-        self.compute_prog["u_frequency"].value = float(self.config.frequency)
-        self.compute_prog["u_amplitude"].value = float(self.config.amplitude)
-        self.compute_prog["u_persistence"].value = float(self.config.persistence)
-        self.compute_prog["u_lacunarity"].value = float(self.config.lacunarity)
-        self.compute_prog["u_seed"].value = float(self.config.seed)
+        packed = self.stack.pack_gpu()
+        self._set_uniform_value(self.compute_prog, "u_layer_count", int(packed["count"]))
+        self._set_uniform_value(
+            self.compute_prog,
+            "u_layer_types",
+            tuple(int(v) for v in packed["types"]),
+        )
+        self._set_uniform_value(
+            self.compute_prog,
+            "u_layer_octaves",
+            tuple(int(v) for v in packed["octaves"]),
+        )
+        self._set_uniform_value(
+            self.compute_prog,
+            "u_layer_enabled",
+            tuple(int(v) for v in packed["enabled"]),
+        )
+        self._set_uniform_value(
+            self.compute_prog,
+            "u_layer_params0",
+            [tuple(float(v) for v in row) for row in packed["params0"]],
+        )
+        self._set_uniform_value(
+            self.compute_prog,
+            "u_layer_params1",
+            [tuple(float(v) for v in row) for row in packed["params1"]],
+        )
+        self._set_uniform_value(
+            self.compute_prog,
+            "u_layer_params2",
+            [tuple(float(v) for v in row) for row in packed["params2"]],
+        )
+        self.compute_prog["u_normal_step"].value = float(self._normal_step())
 
     def _set_bounded_mesh_stats(self) -> None:
-        height_bound = max(abs(float(self.config.amplitude)), 0.001)
-        self.mesh["height_min"] = -float(self.config.amplitude)
-        self.mesh["height_max"] = float(self.config.amplitude)
+        height_bound = self.stack.height_color_scale()
+        self.mesh["height_min"] = -height_bound
+        self.mesh["height_max"] = height_bound
         self.mesh["height_scale"] = height_bound
         self.mesh["height_range_exact"] = False
         self.mesh["stats"] = []
@@ -906,6 +1065,60 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
             self.rebuild_mesh()
         else:
             self.compute_terrain()
+
+    def set_subdivisions(self, subdivisions: int) -> None:
+        subdivisions = max(1, min(MAX_SUBDIVISIONS, int(subdivisions)))
+        if subdivisions == self.config.subdivisions:
+            return
+        self.config = SphereTerrainConfig(
+            subdivisions=subdivisions,
+            frequency=self.config.frequency,
+            amplitude=self.config.amplitude,
+            octaves=self.config.octaves,
+            persistence=self.config.persistence,
+            lacunarity=self.config.lacunarity,
+            seed=self.config.seed,
+        )
+        self.rebuild_mesh()
+
+    def selected(self) -> TerrainLayer | None:
+        if not self.stack.layers:
+            return None
+        self.selected_layer = self.stack.clamp_index(self.selected_layer)
+        return self.stack.layers[self.selected_layer]
+
+    def upload_terrain_stack(self) -> None:
+        self.selected_layer = self.stack.clamp_index(self.selected_layer)
+        self.compute_terrain()
+
+    def reset_terrain(self) -> None:
+        self.stack = make_initial_sphere_stack()
+        self.selected_layer = 0
+        self.upload_terrain_stack()
+
+    def add_random_layer(
+        self,
+        force_kind: LayerKind | None = None,
+        octaves: int | None = None,
+    ) -> None:
+        self.selected_layer = self.stack.add_random_layer(
+            self.rng,
+            force_kind=force_kind,
+            octaves=octaves,
+        )
+        self.upload_terrain_stack()
+
+    def remove_layer(self, index: int) -> None:
+        self.selected_layer = self.stack.remove_layer(index)
+        self.upload_terrain_stack()
+
+    def remove_selected_layer(self) -> None:
+        self.remove_layer(self.selected_layer)
+
+    def set_layer_enabled(self, index: int, enabled: bool) -> None:
+        if 0 <= index < len(self.stack.layers):
+            self.stack.layers[index].enabled = enabled
+            self.upload_terrain_stack()
 
     def rebuild_mesh(self) -> None:
         self.mesh = compute_gpu_subdivision_counts(self.config.subdivisions)
@@ -982,11 +1195,61 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         self.ui.key_event(key, action, modifiers)
         if action != self.wnd.keys.ACTION_PRESS:
             return
-        if key == self.wnd.keys.C:
-            self.palette = (self.palette + 1) % len(self.palette_names)
-            self.mark_active()
+
+        if key == self.wnd.keys.A:
+            self.add_random_layer()
+        elif key == self.wnd.keys.NUMBER_1:
+            self.add_random_layer(force_kind=LayerKind.SIMPLE, octaves=1)
+        elif key == self.wnd.keys.NUMBER_2:
+            self.add_random_layer(force_kind=LayerKind.SIMPLE, octaves=2)
+        elif key == self.wnd.keys.NUMBER_3:
+            self.add_random_layer(force_kind=LayerKind.SIMPLE, octaves=3)
+        elif key == self.wnd.keys.V:
+            self.add_random_layer(force_kind=LayerKind.VALLEY)
+        elif key == self.wnd.keys.B:
+            self.add_random_layer(force_kind=LayerKind.BILLOW)
+        elif key == self.wnd.keys.G:
+            self.add_random_layer(force_kind=LayerKind.RIDGED)
         elif key == self.wnd.keys.W:
+            self.add_random_layer(force_kind=LayerKind.WARPED)
+        elif key == self.wnd.keys.TAB:
+            if self.stack.layers:
+                self.selected_layer = (self.selected_layer + 1) % len(self.stack.layers)
+                self.mark_active()
+        elif key in (self.wnd.keys.DELETE, self.wnd.keys.BACKSPACE):
+            self.remove_selected_layer()
+        elif key == self.wnd.keys.E:
+            layer = self.selected()
+            if layer is not None:
+                layer.enabled = not layer.enabled
+                self.upload_terrain_stack()
+        elif key == self.wnd.keys.R:
+            self.reset_terrain()
+        elif key == self.wnd.keys.PAGE_UP:
+            layer = self.selected()
+            if layer is not None:
+                layer.frequency = min(64.0, layer.frequency + 0.75)
+                self.upload_terrain_stack()
+        elif key == self.wnd.keys.PAGE_DOWN:
+            layer = self.selected()
+            if layer is not None:
+                layer.frequency = max(0.25, layer.frequency - 0.75)
+                self.upload_terrain_stack()
+        elif key == self.wnd.keys.LEFT_BRACKET:
+            layer = self.selected()
+            if layer is not None:
+                layer.amplitude = max(0.0, layer.amplitude - 0.005)
+                self.upload_terrain_stack()
+        elif key == self.wnd.keys.RIGHT_BRACKET:
+            layer = self.selected()
+            if layer is not None:
+                layer.amplitude = min(0.35, layer.amplitude + 0.005)
+                self.upload_terrain_stack()
+        elif key == self.wnd.keys.F:
             self.wireframe = not self.wireframe
+            self.mark_active()
+        elif key == self.wnd.keys.C:
+            self.palette = (self.palette + 1) % len(self.palette_names)
             self.mark_active()
         elif key == self.wnd.keys.HOME:
             self.reset_camera()

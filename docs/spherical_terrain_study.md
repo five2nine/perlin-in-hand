@@ -380,14 +380,19 @@ height = noise3(normalize(position) * frequency)
 
 ### Q. 현재 스피어 terrain은 여러 레이어를 갖는가?
 
-현재 스피어 terrain은 평면 terrain generator처럼 레이어 스택을 갖지 않는다. 구조는 단일 fBm 레이어다.
+현재 스피어 terrain은 평면 terrain generator와 같은 레이어 스택을 갖는다. `Simple`, `fBm`, `Ridged`, `Billow`, `Valley`, `Warped` 레이어를 enabled 상태에 따라 누적한다.
 
 ```text
-sphere terrain = one fBm noise layer
-one fBm layer = multiple octaves
+sphere terrain height =
+  layer0(direction)
+  + layer1(direction)
+  + layer2(direction)
+  + ...
 ```
 
-따라서 `octaves`는 있다. 하지만 `Simple + Valley + Warped`처럼 여러 레이어를 더하는 구조는 아직 없다.
+각 레이어는 자신의 frequency, amplitude, octaves, persistence, lacunarity, seed, valley_power, warp, enabled 값을 가진다. 평면 terrain에서는 각 레이어가 2D `(x, y)` 도메인에서 계산되지만, 스피어 terrain에서는 같은 레이어 개념을 3D 방향 벡터 `direction.xyz` 도메인에서 계산한다.
+
+따라서 `octaves`와 `layers`는 서로 다른 축이다. `octaves`는 한 레이어 내부에서 여러 주파수의 노이즈를 더하는 것이고, `layers`는 성격이 다른 여러 지형 함수를 누적하는 것이다.
 
 ### Q. Subdivision은 구면을 몇 등분한다는 뜻인가?
 

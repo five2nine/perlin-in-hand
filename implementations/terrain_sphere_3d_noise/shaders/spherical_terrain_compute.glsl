@@ -8,15 +8,19 @@ layout(std430, binding = 0) writeonly buffer TerrainBuffer {
 
 uniform int u_draw_vertex_count;
 uniform int u_subdivision_steps;
-uniform int u_octaves;
-uniform float u_frequency;
-uniform float u_amplitude;
-uniform float u_persistence;
-uniform float u_lacunarity;
-uniform float u_seed;
+uniform int u_layer_count;
+uniform int u_layer_types[16];
+uniform int u_layer_octaves[16];
+uniform int u_layer_enabled[16];
+uniform vec4 u_layer_params0[16]; // frequency, amplitude, persistence, lacunarity
+uniform vec4 u_layer_params1[16]; // seed_x, seed_y, rotation, valley_power
+uniform vec4 u_layer_params2[16]; // warp_strength, warp_frequency, warp_seed_x, warp_seed_y
+uniform float u_normal_step;
 
 const float TAU = 6.28318530718;
 const float PHI = 1.61803398875;
+const int MAX_LAYERS = 16;
+const int MAX_OCTAVES = 6;
 
 vec3 base_vertex(int index) {
     vec3 vertex = vec3(0.0);
@@ -154,36 +158,117 @@ float gradient_noise_3d(vec3 point, float seed) {
     return clamp(mix(nxy0, nxy1, s.z) * 1.73205080757, -1.0, 1.0);
 }
 
-float sample_fbm(vec3 direction) {
+vec3 rotate_y(vec3 value, float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+    return vec3(
+        c * value.x - s * value.z,
+        value.y,
+        s * value.x + c * value.z
+    );
+}
+
+vec3 layer_seed_offset(int index) {
+    vec4 p1 = u_layer_params1[index];
+    return vec3(p1.x, p1.y, p1.x * 0.37 + p1.y * 0.19);
+}
+
+float layer_seed(int index, float seed_shift) {
+    vec4 p1 = u_layer_params1[index];
+    return p1.x * 0.13 + p1.y * 0.17 + seed_shift;
+}
+
+float sample_base(int index, vec3 domain, float frequency, float seed_shift) {
+    vec3 point = domain * frequency + layer_seed_offset(index);
+    return gradient_noise_3d(point, layer_seed(index, seed_shift));
+}
+
+float sample_fbm_layer(int index, vec3 domain) {
+    vec4 p0 = u_layer_params0[index];
     float total = 0.0;
     float amplitude = 1.0;
-    float frequency = u_frequency;
+    float frequency = p0.x;
     float amplitude_sum = 0.0;
-    int octave_count = clamp(u_octaves, 1, 8);
-    vec3 seed_offset = vec3(u_seed * 0.11, u_seed * -0.07, u_seed * 0.19);
 
-    for (int octave = 0; octave < 8; ++octave) {
-        if (octave >= octave_count) {
+    for (int octave = 0; octave < MAX_OCTAVES; ++octave) {
+        if (octave >= u_layer_octaves[index]) {
             break;
         }
-        vec3 point = direction * frequency + seed_offset;
-        total += gradient_noise_3d(point, u_seed + float(octave) * 23.31) * amplitude;
+        total += sample_base(index, domain, frequency, float(octave) * 23.31) * amplitude;
         amplitude_sum += amplitude;
-        frequency *= u_lacunarity;
-        amplitude *= u_persistence;
+        frequency *= p0.w;
+        amplitude *= p0.z;
     }
 
-    return total / max(amplitude_sum, 0.00000001) * u_amplitude;
+    return total / max(amplitude_sum, 0.00000001);
+}
+
+vec3 transform_layer_domain(int index, vec3 direction) {
+    vec4 p1 = u_layer_params1[index];
+    vec4 p2 = u_layer_params2[index];
+    vec3 domain = rotate_y(direction, p1.z);
+
+    if (p2.x > 0.0) {
+        vec3 warp_domain = domain * p2.y + vec3(p2.z, p2.w, p2.z * 0.37 + p2.w * 0.19);
+        vec3 warp = vec3(
+            gradient_noise_3d(warp_domain, p2.z * 0.07 + 11.0),
+            gradient_noise_3d(warp_domain + vec3(37.2, -19.1, 13.7), p2.w * 0.07 + 29.0),
+            gradient_noise_3d(warp_domain + vec3(-23.4, 41.6, -31.8), (p2.z + p2.w) * 0.05 + 47.0)
+        );
+        domain += warp * p2.x;
+    }
+
+    return domain;
+}
+
+float sample_layer(int index, vec3 direction) {
+    int kind = u_layer_types[index];
+    vec4 p0 = u_layer_params0[index];
+    vec4 p1 = u_layer_params1[index];
+    vec3 domain = transform_layer_domain(index, direction);
+
+    float value = 0.0;
+    if (kind == 0) {
+        if (u_layer_octaves[index] <= 1) {
+            value = sample_base(index, domain, p0.x, 0.0);
+        } else {
+            value = sample_fbm_layer(index, domain);
+        }
+    } else if (kind == 1 || kind == 5) {
+        value = sample_fbm_layer(index, domain);
+    } else if (kind == 2) {
+        value = (1.0 - abs(sample_fbm_layer(index, domain))) * 2.0 - 1.0;
+    } else if (kind == 3) {
+        value = abs(sample_fbm_layer(index, domain)) * 2.0 - 1.0;
+    } else if (kind == 4) {
+        float valley = max(0.0, 1.0 - abs(sample_fbm_layer(index, domain)));
+        value = -pow(valley, p1.w);
+    }
+
+    return value * p0.y;
+}
+
+float get_height(vec3 direction) {
+    float height = 0.0;
+    for (int index = 0; index < MAX_LAYERS; ++index) {
+        if (index >= u_layer_count) {
+            break;
+        }
+        if (u_layer_enabled[index] == 0) {
+            continue;
+        }
+        height += sample_layer(index, direction);
+    }
+    return height;
 }
 
 vec3 displaced_position(vec3 direction) {
-    float height = sample_fbm(direction);
+    float height = get_height(direction);
     return direction * (1.0 + height);
 }
 
 vec3 sample_normal(vec3 direction) {
-    float finest_frequency = u_frequency * pow(u_lacunarity, float(max(u_octaves - 1, 0)));
-    float step_size = clamp(0.35 / max(finest_frequency, 1.0), 0.001, 0.015);
+    float step_size = clamp(u_normal_step, 0.001, 0.015);
     vec3 reference = abs(direction.y) < 0.96 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
     vec3 tangent = normalize(cross(reference, direction));
     vec3 bitangent = normalize(cross(direction, tangent));
@@ -217,7 +302,7 @@ void main() {
     }
 
     vec3 direction = direction_for_draw_vertex(index);
-    float height = sample_fbm(direction);
+    float height = get_height(direction);
     vec3 position = direction * (1.0 + height);
     vec3 normal = sample_normal(direction);
     write_vertex(index, position, normal, height);

@@ -9,7 +9,8 @@ import numpy as np
 
 
 MAX_LAYERS = 16
-MAX_OCTAVES = 3
+MAX_OCTAVES = 6
+RANDOM_MAX_OCTAVES = 3
 
 
 class LayerKind(IntEnum):
@@ -121,7 +122,7 @@ class TerrainStack:
         else:
             kind = force_kind
         kind = LayerKind(kind)
-        selected_octaves = rng.randint(1, MAX_OCTAVES)
+        selected_octaves = rng.randint(1, min(MAX_OCTAVES, RANDOM_MAX_OCTAVES))
         if octaves is not None:
             selected_octaves = octaves
 
