@@ -163,14 +163,14 @@ CPU 버전에서는 높은 해상도와 많은 레이어를 함께 쓰면 조작
 
 현재 지형 상태를 `exports/terrain_generation/*.npz` 파일로 저장한다.
 
-파일에는 데이터와 형태 정보가 함께 들어간다.
+파일에는 recipe와 baked result가 함께 들어간다. 이 저장 정책은 [terrain_export_strategy.md](terrain_export_strategy.md)에 정리한다.
 
 - `vertices`: `(resolution * resolution, 7)` float32 배열이다. 열 순서는 `pos_x, pos_y, pos_z, normal_x, normal_y, normal_z, height`다.
 - `positions`: `(resolution * resolution, 3)` float32 위치 배열이다.
 - `normals`: `(resolution * resolution, 3)` float32 노멀 배열이다.
 - `heights`: `(resolution * resolution,)` float32 높이 배열이다.
 - `indices`: `(triangle_count, 3)` uint32 삼각형 인덱스 배열이다.
-- `metadata_json`: backend, resolution, palette, vertex layout, index layout, 레이어 종류와 속성 값을 담은 JSON 문자열이다.
+- `metadata_json`: backend, resolution, palette, vertex/index layout, recipe, baked 배열 이름, 레이어 종류와 속성 값을 담은 JSON 문자열이다.
 
 CPU 버전은 CPU에서 계산해 업로드한 현재 VBO를 읽어서 저장한다. GPU 버전은 transform feedback으로 구워진 현재 VBO를 읽어서 저장한다. 따라서 export 파일은 현재 화면에 렌더링되는 메시 데이터를 다른 프로그램에서 다시 읽기 위한 결과물이다.
 

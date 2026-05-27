@@ -56,6 +56,7 @@ uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise
 - 선택 레이어의 octaves는 최대 6까지 조정할 수 있다. Random 프리셋은 기본 관찰이 너무 촘촘해지지 않도록 1~3 octave 범위에서 시작한다.
 - UI에서 subdivisions를 바꾸면 draw vertex 수가 바뀌므로 terrain vertex buffer를 다시 잡고 compute shader를 dispatch한다.
 - 정확한 height 범위와 위도 밴드 통계는 GPU buffer readback이 필요하므로 `Read GPU Stats` 버튼으로 요청할 때만 읽는다.
+- `Export` 버튼은 recipe와 baked sphere mesh를 함께 담은 Hybrid `.npz` 파일을 `exports/terrain_generation`에 저장한다.
 - 각 vertex의 정규화 방향 벡터를 3D gradient noise 입력으로 사용한다.
 - 각 레이어 내부에서 fBm은 여러 octave의 3D noise를 더해 만든다.
 - 높이 변위는 radial displacement로 적용한다.
@@ -76,6 +77,26 @@ ModernGL 창의 ImGui 패널은 다음 항목을 표시한다.
 - triangle 수
 - height 범위
 - 위도 밴드별 count, mean, standard deviation
+
+## Export
+
+스피어 terrain export는 [terrain_export_strategy.md](terrain_export_strategy.md)의 Hybrid 정책을 따른다.
+
+```text
+recipe:
+  generator_type = sphere_terrain
+  subdivisions
+  layer stack
+  palette
+
+baked:
+  vertices
+  normals
+  heights
+  sequential triangle indices
+```
+
+현재 스피어 terrain은 GPU compute shader가 non-indexed triangle list를 만들기 때문에, export 파일의 `indices`는 draw vertex 순서에 맞춘 순차 triangle index다. Viewer는 recipe를 재실행하지 않고 baked mesh를 바로 표시할 수 있다.
 
 오른쪽 상단의 작은 표시기는 현재 카메라 회전 기준을 보여준다.
 

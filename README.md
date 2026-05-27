@@ -121,6 +121,7 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 GPU/CPU 레이어 UI 버전은 같은 조작을 사용합니다.
 창 좌측의 ImGui 패널에서도 같은 기능을 버튼, 체크박스, 콤보박스, 슬라이더로 조작할 수 있습니다.
 ImGui `Export` 버튼은 현재 지형 메시를 `exports/terrain_generation/*.npz`로 저장합니다.
+Export 파일은 생성 recipe와 baked mesh를 함께 담는 Hybrid 형식입니다.
 Matplotlib 뷰어는 경로를 생략하면 가장 최근 export 파일을 열고, 파일을 지정하면 해당 `.npz`를 엽니다.
 pygame-ce CPU 뷰어는 같은 파일을 2D heightmap으로 표시합니다.
 GPU Export 뷰어도 경로를 생략하면 가장 최근 CPU/GPU export 파일을 열고, 제너레이터와 같은 셰이더로 렌더링합니다.

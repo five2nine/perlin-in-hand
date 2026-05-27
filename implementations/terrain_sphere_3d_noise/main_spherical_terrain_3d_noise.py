@@ -22,6 +22,7 @@ PROJECT_ROOT = SCRIPT_DIR.parents[1]
 SHADER_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_gpu" / "shaders"
 SPHERE_SHADER_DIR = SCRIPT_DIR / "shaders"
 COMMON_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_common"
+EXPORT_DIR = PROJECT_ROOT / "exports" / "terrain_generation"
 DEFAULT_SUBDIVISIONS = 6
 MAX_SUBDIVISIONS = 8
 DEFAULT_ACTIVE_FPS = 60
@@ -30,6 +31,7 @@ DEFAULT_IDLE_FPS = 12
 if str(COMMON_DIR) not in sys.path:
     sys.path.insert(0, str(COMMON_DIR))
 
+from terrain_export import export_sphere_terrain_npz  # noqa: E402
 from terrain_layers import MAX_OCTAVES, LayerKind, TerrainLayer, TerrainStack  # noqa: E402
 
 with open(SHADER_DIR / "terrain_heightfield.vert", "r", encoding="utf-8") as f:
@@ -605,6 +607,11 @@ class SphereTerrainPanel:
             imgui.same_line()
             if imgui.button("Reset Camera"):
                 app.reset_camera()
+            imgui.same_line()
+            if imgui.button("Export"):
+                app.export_terrain()
+            if getattr(app, "last_export_path", ""):
+                imgui.text_wrapped(f"Exported: {Path(app.last_export_path).name}")
 
             imgui.separator()
             self._draw_add_buttons(app)
@@ -935,6 +942,7 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         self.render_vao = None
         self.last_build_ms = 0.0
         self.last_stats_ms = 0.0
+        self.last_export_path = ""
         self.last_time = time.perf_counter()
         self.active_fps = max(1, int(CASE_ARGS.active_fps))
         self.idle_fps = max(1, int(CASE_ARGS.idle_fps))
@@ -1119,6 +1127,20 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         if 0 <= index < len(self.stack.layers):
             self.stack.layers[index].enabled = enabled
             self.upload_terrain_stack()
+
+    def export_terrain(self) -> None:
+        if self.terrain_vbo is None:
+            return
+        self.ctx.finish()
+        self.last_export_path = export_sphere_terrain_npz(
+            str(EXPORT_DIR),
+            self.palette_names[self.palette],
+            self.stack,
+            self.config.subdivisions,
+            self.mesh,
+            self.terrain_vbo.read(),
+        )
+        print(f"Exported sphere terrain: {self.last_export_path}")
 
     def rebuild_mesh(self) -> None:
         self.mesh = compute_gpu_subdivision_counts(self.config.subdivisions)

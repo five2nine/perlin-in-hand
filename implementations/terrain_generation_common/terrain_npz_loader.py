@@ -52,6 +52,10 @@ def infer_grid_shape(
         resolution = int(resolution)
         return resolution, resolution
 
+    mesh_shape = metadata.get("mesh_shape")
+    if mesh_shape and len(mesh_shape) >= 1:
+        return int(mesh_shape[0]), 1
+
     sample = data["heights"] if "heights" in data else data["vertices"]
     count = int(sample.shape[0])
     side = int(round(count**0.5))

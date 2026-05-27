@@ -227,7 +227,10 @@ class TerrainNpzInfoPanel:
             imgui.text("File")
             imgui.text_wrapped(str(app.export_path))
             imgui.separator()
-            imgui.text(f"Grid: {app.rows} x {app.cols}")
+            if app.metadata.get("generator_type") == "sphere_terrain":
+                imgui.text(f"Mesh: {app.metadata.get('topology', 'mesh')}")
+            else:
+                imgui.text(f"Grid: {app.rows} x {app.cols}")
             imgui.text(f"Vertices: {app.mesh['vertices'].shape[0]:,}")
             imgui.text(f"Triangles: {app.mesh['indices'].shape[0] // 3:,}")
             imgui.text(
@@ -300,7 +303,10 @@ class GPUTerrainNpzViewerApp(mglw.WindowConfig):
         print("GPU Terrain NPZ Viewer")
         print("-" * 72)
         print(f"File       : {self.export_path}")
-        print(f"Grid       : {self.rows} x {self.cols}")
+        if self.metadata.get("generator_type") == "sphere_terrain":
+            print(f"Mesh       : {self.metadata.get('topology', 'mesh')}")
+        else:
+            print(f"Grid       : {self.rows} x {self.cols}")
         print(f"Triangles  : {self.mesh['indices'].shape[0] // 3}")
         print(f"Height     : {self.mesh['height_min']:.6f} .. {self.mesh['height_max']:.6f}")
         print(f"Backend    : {self.metadata.get('backend', 'unknown')}")
