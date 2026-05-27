@@ -6,6 +6,8 @@
 
 개념을 공부하기 위한 설명과 작업 중 나온 질문과 답변은 [spherical_terrain_study.md](spherical_terrain_study.md)에 정리한다. 이 문서는 실행법과 관찰 기준을 중심으로 둔다.
 
+GPU에서 terrain 샘플 생성을 처리하기 위한 선택지, 특히 tessellation shader와 compute shader의 차이도 같은 학습 문서의 Q&A에 기록한다. 현재 구현은 compute shader 경로를 사용한다.
+
 핵심 샘플링 식은 다음과 같다.
 
 ```text
@@ -46,6 +48,10 @@ uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise
 - `subdivisions`가 높아질수록 삼각형 수와 vertex 수가 증가한다.
 - 기본값은 `subdivisions = 6`이며, UI와 명령행에서는 최대 8까지 올릴 수 있다.
 - 화면에 변화가 없어도 ModernGL 창은 렌더 루프를 돈다. 현재 케이스는 입력이 없으면 idle FPS cap을 낮춰 고밀도 구면 mesh의 정지 상태 GPU 사용량을 줄인다.
+- `icosphere` 토폴로지와 index buffer는 CPU에서 만든다.
+- 각 vertex의 height, displaced position, normal은 compute shader가 GPU buffer에 쓴다.
+- UI에서 frequency, amplitude, octave, seed를 바꾸면 기존 topology를 유지하고 compute shader만 다시 dispatch한다.
+- UI에서 subdivisions를 바꾸면 topology와 index buffer를 다시 만든 뒤 compute shader를 dispatch한다.
 - 각 vertex의 정규화 방향 벡터를 3D gradient noise 입력으로 사용한다.
 - fBm은 여러 octave의 3D noise를 더해 만든다.
 - 높이 변위는 radial displacement로 적용한다.

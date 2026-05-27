@@ -130,14 +130,19 @@ Icosphere는 정이십면체에서 시작해 각 삼각형을 나누고 다시 �
 icosahedron 생성
 삼각형 subdivision
 각 vertex를 normalize해서 unit sphere 위로 이동
-direction 벡터를 3D fBm noise에 입력
-height 계산
-position = direction * (1 + height)
-삼각형 face로 vertex normal 재계산
+direction buffer를 GPU storage buffer로 업로드
+compute shader dispatch
+  direction 벡터를 3D fBm noise에 입력
+  height 계산
+  position = direction * (1 + height)
+  tangent sampling으로 normal 계산
+  terrain vertex buffer에 저장
 기존 terrain 렌더 셰이더로 표시
 ```
 
-현재 케이스의 기본값은 `subdivisions = 6`이고, 실험 상한은 8이다. `subdivisions = 8`은 약 1,310,720개 삼각형을 만들므로 높은 octave 관찰에는 유리하지만, 메쉬 생성과 업로드 비용도 커진다.
+현재 케이스의 기본값은 `subdivisions = 6`이고, 실험 상한은 8이다. `subdivisions = 8`은 약 1,310,720개 삼각형을 만들므로 높은 octave 관찰에는 유리하지만, 토폴로지 생성과 index buffer 업로드 비용도 커진다.
+
+현재 compute shader 경로에서 CPU가 담당하는 부분은 `icosphere` 토폴로지 생성이다. GPU가 담당하는 부분은 각 vertex의 height, displaced position, normal 생성이다. 따라서 frequency, amplitude, octave, seed 변경은 topology를 다시 만들지 않고 compute shader만 다시 실행한다. subdivisions 변경은 vertex 수와 triangle 수 자체가 바뀌므로 CPU topology 생성과 GPU terrain 계산을 함께 다시 수행한다.
 
 ModernGL 창은 카메라가 멈춰 있어도 렌더 루프를 계속 돈다. 그래서 고밀도 구면 mesh는 영상 재생이나 애니메이션이 없어도 GPU 사용량을 만들 수 있다. 현재 케이스는 입력 중에는 `active-fps`를 쓰고, 움직임이 없으면 `idle-fps`로 내려가도록 제한한다. 기본값은 active 60FPS, idle 12FPS다.
 
@@ -219,7 +224,9 @@ normal = direction
 
 하지만 height를 적용한 뒤의 표면은 더 이상 완벽한 구가 아니다. 이때도 `direction`을 normal로 쓰면 조명이 너무 매끈하게 보인다. 산과 계곡의 기울기가 조명에 반영되지 않는다.
 
-현재 구현은 변위된 삼각형의 face normal을 만들고, 인접 face normal을 더해 vertex normal을 다시 계산한다. 그래서 표면의 실제 기하가 조명에 반영된다.
+현재 창 렌더링 구현은 compute shader에서 각 vertex 주변의 tangent 방향과 bitangent 방향으로 height를 다시 샘플링하고, 그 두 방향의 기울기를 이용해 normal을 계산한다. 그래서 CPU가 face normal을 누적하지 않아도 산과 계곡의 기울기가 조명에 반영된다.
+
+`--analyze-only` 통계 경로는 창을 열지 않기 때문에 기존 CPU 계산을 사용한다. 이 경로에서는 변위된 삼각형의 face normal을 만들고, 인접 face normal을 더해 vertex normal을 다시 계산한다.
 
 ## 3D Noise의 남는 한계
 
@@ -381,6 +388,65 @@ idle-fps = 움직임이 없을 때 cap
 ```powershell
 uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --active-fps 60 --idle-fps 8
 ```
+
+### Q. Tessellation shader와 compute shader는 무엇이 다른가?
+
+둘 다 GPU를 쓰지만 GPU를 쓰는 위치가 다르다.
+
+```text
+Tessellation shader = 렌더링 파이프라인 안에서 삼각형을 더 잘게 쪼개는 단계
+Compute shader = 렌더링 파이프라인 밖에서 실행하는 범용 병렬 계산
+```
+
+Tessellation shader는 화면에 그리는 과정 안에 들어 있다.
+
+```text
+CPU coarse mesh
+  -> vertex shader
+  -> tessellation control shader
+  -> tessellation primitive generator
+  -> tessellation evaluation shader
+  -> fragment shader
+  -> screen
+```
+
+이 방식은 “지금 그릴 triangle을 화면에서 더 촘촘하게 만든다”는 목적에 특화되어 있다. 구면 terrain에서는 낮은 해상도 icosphere triangle을 넣고, GPU가 triangle 내부를 세분화한 뒤, 새 점을 normalize해서 구면 위로 올리고, 그 위치에서 3D noise를 샘플링해 radial displacement를 적용할 수 있다.
+
+Compute shader는 렌더링 파이프라인 바깥에 있다.
+
+```text
+CPU parameters
+  -> compute shader dispatch
+  -> GPU buffer / texture / SSBO에 결과 저장
+  -> render pass가 그 결과 buffer를 읽어 그림
+  -> screen
+```
+
+이 방식은 렌더링 전용 단계가 아니라 GPU에서 실행하는 일반 병렬 작업에 가깝다. CPU 코드의 병렬 for-loop처럼 생각할 수 있다.
+
+```text
+for each vertex index on GPU:
+    direction 계산
+    noise 계산
+    height 적용
+    normal 계산
+    output buffer에 저장
+```
+
+두 방식의 차이를 정리하면 다음과 같다.
+
+| 구분 | Tessellation shader | Compute shader |
+|---|---|---|
+| 위치 | 렌더링 파이프라인 안 | 렌더링 파이프라인 밖 |
+| 성격 | 표면 세분화에 특화 | 범용 병렬 계산 |
+| subdivision | 매우 자연스러움 | 가능하지만 직접 설계 |
+| noise 계산 | evaluation shader에서 가능 | compute 작업으로 가능 |
+| 결과 저장 | 기본적으로 렌더링 중 임시 결과 | buffer/texture에 명시 저장 |
+| export/재사용 | 상대적으로 불편 | 상대적으로 자연스러움 |
+| LOD | 카메라 거리 기반으로 자연스러움 | 가능하지만 직접 구현 |
+| 사고방식 | “그릴 때 더 촘촘히 그린다” | “GPU에서 데이터를 만들어 저장한다” |
+
+현재 스피어 terrain은 compute shader 방식을 선택했다. subdivision된 vertex direction을 입력 buffer로 넣고, compute shader가 noise height, displaced position, normal을 terrain vertex buffer에 저장한다. 이 결과 buffer를 렌더링과 export 양쪽에 쓸 수 있기 때문이다. Tessellation shader는 구면 표면을 실시간으로 촘촘하게 그리는 데 강하지만, 생성된 데이터를 파일이나 분석용 배열로 다루려면 별도 readback 구조가 필요하다.
 
 ### Q. 오른쪽 상단 구면 표시기는 무엇을 보여주는가?
 

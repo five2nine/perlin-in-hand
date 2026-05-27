@@ -19,6 +19,7 @@ from moderngl_window.scene import OrbitCamera
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[1]
 SHADER_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_gpu" / "shaders"
+SPHERE_SHADER_DIR = SCRIPT_DIR / "shaders"
 DEFAULT_SUBDIVISIONS = 6
 MAX_SUBDIVISIONS = 8
 DEFAULT_ACTIVE_FPS = 60
@@ -29,6 +30,9 @@ with open(SHADER_DIR / "terrain_heightfield.vert", "r", encoding="utf-8") as f:
 
 with open(SHADER_DIR / "terrain_heightfield.frag", "r", encoding="utf-8") as f:
     FRAGMENT_SHADER = f.read()
+
+with open(SPHERE_SHADER_DIR / "spherical_terrain_compute.glsl", "r", encoding="utf-8") as f:
+    COMPUTE_SHADER = f.read()
 
 
 @dataclass(frozen=True)
@@ -345,22 +349,33 @@ def compute_vertex_normals(positions: np.ndarray, faces: np.ndarray) -> np.ndarr
     return _normalize(normals)
 
 
+def build_spherical_topology(subdivisions: int) -> dict[str, Any]:
+    directions, faces = make_icosphere(subdivisions)
+    indices_tri = faces.astype("u4")
+    return {
+        "directions": directions.astype("f4"),
+        "indices_tri": indices_tri,
+        "indices": indices_tri.reshape(-1),
+    }
+
+
 def build_spherical_terrain(config: SphereTerrainConfig) -> dict[str, Any]:
-    directions, faces = make_icosphere(config.subdivisions)
+    topology = build_spherical_topology(config.subdivisions)
+    directions = topology["directions"].astype(np.float64)
+    faces = topology["indices_tri"]
     heights = sample_fbm_3d(directions, config)
     positions = directions * (1.0 + heights[:, None])
     normals = compute_vertex_normals(positions, faces)
     vertices = np.concatenate([positions, normals, heights[:, None]], axis=1).astype("f4")
-    indices_tri = faces.astype("u4")
     stats = compute_latitude_stats(directions, heights)
     return {
-        "directions": directions.astype("f4"),
+        "directions": topology["directions"],
         "positions": positions.astype("f4"),
         "normals": normals.astype("f4"),
         "heights": heights.astype("f4"),
         "vertices": vertices,
-        "indices_tri": indices_tri,
-        "indices": indices_tri.reshape(-1),
+        "indices_tri": topology["indices_tri"],
+        "indices": topology["indices"],
         "stats": stats,
         "height_min": float(np.min(heights)),
         "height_max": float(np.max(heights)),
@@ -515,9 +530,12 @@ class SphereTerrainPanel:
         expanded, _ = imgui.begin("Spherical Terrain")
         if expanded:
             imgui.text("3D noise sampled by sphere direction")
+            imgui.text("Build: GPU compute shader")
             imgui.text(f"FPS: {app.fps_val:.1f}")
             imgui.same_line()
             imgui.text(f"Cap: {app.current_fps_cap:d}")
+            imgui.same_line()
+            imgui.text(f"Compute: {app.last_build_ms:.2f} ms")
             imgui.separator()
 
             changed = False
@@ -559,16 +577,17 @@ class SphereTerrainPanel:
                 ]
             )
             if changed:
-                app.config = SphereTerrainConfig(
-                    subdivisions=int(subdivisions),
-                    frequency=float(frequency),
-                    amplitude=float(amplitude),
-                    octaves=int(octaves),
-                    seed=float(seed),
-                    persistence=app.config.persistence,
-                    lacunarity=app.config.lacunarity,
+                app.apply_config(
+                    SphereTerrainConfig(
+                        subdivisions=int(subdivisions),
+                        frequency=float(frequency),
+                        amplitude=float(amplitude),
+                        octaves=int(octaves),
+                        seed=float(seed),
+                        persistence=app.config.persistence,
+                        lacunarity=app.config.lacunarity,
+                    )
                 )
-                app.rebuild_mesh()
 
             changed_palette, palette = imgui.combo(
                 "Palette",
@@ -741,7 +760,7 @@ class SphereTerrainPanel:
 
 
 class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
-    gl_version = (3, 3)
+    gl_version = (4, 3)
     title = "Spherical Terrain - 3D Noise Sampling"
     window_size = (1920, 1080)
     aspect_ratio = None
@@ -750,6 +769,7 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.compute_prog = self.ctx.compute_shader(COMPUTE_SHADER)
         self.render_prog = self.ctx.program(
             vertex_shader=RENDER_VERTEX_SHADER,
             fragment_shader=FRAGMENT_SHADER,
@@ -779,9 +799,11 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         self.model_matrix = np.eye(4, dtype="f4")
         self.model_matrix_bytes = self.model_matrix.tobytes()
         self.mesh: dict[str, Any] = {}
+        self.direction_vbo = None
         self.terrain_vbo = None
         self.ebo = None
         self.render_vao = None
+        self.last_build_ms = 0.0
         self.last_time = time.perf_counter()
         self.active_fps = max(1, int(CASE_ARGS.active_fps))
         self.idle_fps = max(1, int(CASE_ARGS.idle_fps))
@@ -797,21 +819,74 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         print("=" * 72)
         print("Spherical Terrain - 3D Noise Sampling")
         print("-" * 72)
+        print("Terrain build: GPU compute shader for height, position, and normals")
         print("Controls: mouse drag rotate, wheel zoom, C palette, W wireframe, HOME reset")
         print(f"Frame cap: active={self.active_fps} fps, idle={self.idle_fps} fps")
         print("Use --analyze-only to print latitude-band statistics without opening a window.")
         print("=" * 72)
 
+    def _set_compute_uniforms(self) -> None:
+        self.compute_prog["u_vertex_count"].value = int(self.mesh["directions"].shape[0])
+        self.compute_prog["u_octaves"].value = int(self.config.octaves)
+        self.compute_prog["u_frequency"].value = float(self.config.frequency)
+        self.compute_prog["u_amplitude"].value = float(self.config.amplitude)
+        self.compute_prog["u_persistence"].value = float(self.config.persistence)
+        self.compute_prog["u_lacunarity"].value = float(self.config.lacunarity)
+        self.compute_prog["u_seed"].value = float(self.config.seed)
+
+    def _read_computed_vertices(self) -> None:
+        vertices = np.frombuffer(self.terrain_vbo.read(), dtype="f4").reshape((-1, 7)).copy()
+        heights = vertices[:, 6].copy()
+        self.mesh["vertices"] = vertices
+        self.mesh["positions"] = vertices[:, 0:3].copy()
+        self.mesh["normals"] = vertices[:, 3:6].copy()
+        self.mesh["heights"] = heights
+        self.mesh["stats"] = compute_latitude_stats(self.mesh["directions"], heights)
+        self.mesh["height_min"] = float(np.min(heights))
+        self.mesh["height_max"] = float(np.max(heights))
+        self.mesh["height_scale"] = max(float(np.max(np.abs(heights))), 0.001)
+
+    def compute_terrain(self) -> None:
+        if self.direction_vbo is None or self.terrain_vbo is None:
+            return
+        start = time.perf_counter()
+        self._set_compute_uniforms()
+        self.direction_vbo.bind_to_storage_buffer(0)
+        self.terrain_vbo.bind_to_storage_buffer(1)
+        vertex_count = int(self.mesh["directions"].shape[0])
+        self.compute_prog.run(group_x=(vertex_count + 127) // 128)
+        self.ctx.memory_barrier(
+            moderngl.SHADER_STORAGE_BARRIER_BIT
+            | moderngl.VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+            | moderngl.BUFFER_UPDATE_BARRIER_BIT
+        )
+        self._read_computed_vertices()
+        self.last_build_ms = (time.perf_counter() - start) * 1000.0
+        self.mark_active(0.8)
+
+    def apply_config(self, config: SphereTerrainConfig) -> None:
+        previous_subdivisions = self.config.subdivisions
+        self.config = config
+        if self.config.subdivisions != previous_subdivisions:
+            self.rebuild_mesh()
+        else:
+            self.compute_terrain()
+
     def rebuild_mesh(self) -> None:
-        self.mesh = build_spherical_terrain(self.config)
+        self.mesh = build_spherical_topology(self.config.subdivisions)
         if self.terrain_vbo is not None:
             self.terrain_vbo.release()
+        if self.direction_vbo is not None:
+            self.direction_vbo.release()
         if self.ebo is not None:
             self.ebo.release()
         if self.render_vao is not None:
             self.render_vao.release()
 
-        self.terrain_vbo = self.ctx.buffer(self.mesh["vertices"].tobytes())
+        directions_gpu = np.zeros((self.mesh["directions"].shape[0], 4), dtype="f4")
+        directions_gpu[:, :3] = self.mesh["directions"]
+        self.direction_vbo = self.ctx.buffer(directions_gpu.tobytes())
+        self.terrain_vbo = self.ctx.buffer(reserve=self.mesh["directions"].shape[0] * 7 * 4)
         self.ebo = self.ctx.buffer(self.mesh["indices"].astype("u4").tobytes())
         self.render_vao = self.ctx.vertex_array(
             self.render_prog,
@@ -819,12 +894,12 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
             index_buffer=self.ebo,
             index_element_size=4,
         )
+        self.compute_terrain()
         self.wnd.title = (
             "Spherical Terrain | "
             f"subdiv={self.config.subdivisions} | "
             f"verts={self.mesh['vertices'].shape[0]:,}"
         )
-        self.mark_active(0.8)
 
     def mark_active(self, duration: float = 0.45) -> None:
         self.active_until = max(self.active_until, time.perf_counter() + duration)
