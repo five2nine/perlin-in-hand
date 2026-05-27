@@ -15,9 +15,11 @@ from moderngl_window.scene import OrbitCamera
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 COMMON_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "terrain_generation_common"))
+EXPORT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "exports", "terrain_generation"))
 if COMMON_DIR not in sys.path:
     sys.path.insert(0, COMMON_DIR)
 
+from terrain_export import export_terrain_npz  # noqa: E402
 from terrain_layers import (  # noqa: E402
     LayerKind,
     TerrainStack,
@@ -85,6 +87,7 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
         self.stack = TerrainStack.default()
         self.selected_layer = 0
         self.last_build_ms = 0.0
+        self.last_export_path = ""
 
         self.model_matrix = np.eye(4, dtype="f4")
         self.model_matrix_bytes = self.model_matrix.tobytes()
@@ -277,6 +280,21 @@ class GPUTerrainGeneratorApp(mglw.WindowConfig):
         self.camera.radius = 1.55
         self.camera.angle_x = 45.0
         self.camera.angle_y = -45.0
+
+    def export_terrain(self) -> None:
+        if self.terrain_vbo is None or self.ebo is None:
+            return
+        self.ctx.finish()
+        self.last_export_path = export_terrain_npz(
+            EXPORT_DIR,
+            "GPU",
+            self.resolution,
+            self.palette_names[self.palette],
+            self.stack,
+            self.terrain_vbo.read(),
+            self.ebo.read(),
+        )
+        print(f"Exported terrain: {self.last_export_path}")
 
     def on_render(self, time_since_start: float, frametime: float):
         now = time.perf_counter()

@@ -32,10 +32,14 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * [shaders/opensimplex_2014.vert](implementations/gpu_heightfield/shaders/opensimplex_2014.vert): OpenSimplex2 높이장 버텍스 셰이더입니다.
 
 ### 4. 정적 지형 생성 유틸리티
-* [main_gpu_terrain_generator.py](implementations/gpu_terrain_generation/main_gpu_terrain_generator.py): Marching Squares가 아닌 하이트필드 방식의 정적 `height = f(x, y)` 지형 생성기입니다. Random, Simple 1/2/3 Oct, Ridged, Billow, Valley, Warped 레이어를 더하고, GPU에서 한 번 구워 정적 VBO로 누적하며 ImGui/키보드 UI로 레이어를 추가·삭제합니다.
-* [main_cpu_terrain_generator.py](implementations/cpu_terrain_generation/main_cpu_terrain_generator.py): GPU 버전과 같은 3D 창, 같은 ImGui/키보드 인터페이스, 같은 셰이더 출력물을 사용하되, 높이/노멀 VBO를 CPU에서 한 번 계산해 업로드하는 유틸리티입니다.
+* [main_gpu_terrain_generator.py](implementations/terrain_generation_gpu/main_gpu_terrain_generator.py): Marching Squares가 아닌 하이트필드 방식의 정적 `height = f(x, y)` 지형 생성기입니다. Random, Simple 1/2/3 Oct, Ridged, Billow, Valley, Warped 레이어를 더하고, GPU에서 한 번 구워 정적 VBO로 누적하며 ImGui/키보드 UI로 레이어를 추가·삭제합니다.
+* [main_cpu_terrain_generator.py](implementations/terrain_generation_cpu/main_cpu_terrain_generator.py): GPU 버전과 같은 3D 창, 같은 ImGui/키보드 인터페이스, 같은 셰이더 출력물을 사용하되, 높이/노멀 VBO를 CPU에서 한 번 계산해 업로드하는 유틸리티입니다.
 * [terrain_layers.py](implementations/terrain_generation_common/terrain_layers.py): GPU/CPU가 공유하는 지형 레이어 정의, 랜덤 레이어 생성, CPU 샘플러입니다.
 * [terrain_imgui.py](implementations/terrain_generation_common/terrain_imgui.py): GPU/CPU 지형 생성기가 함께 사용하는 ImGui 위젯 패널입니다.
+* [terrain_npz_loader.py](implementations/terrain_generation_common/terrain_npz_loader.py): Export된 `.npz` 지형 메시의 데이터와 형상을 세 뷰어가 같은 방식으로 읽기 위한 공용 로더입니다.
+* [main_matplotlib_terrain_npz_viewer.py](implementations/terrain_npz_viewer_matplotlib/main_matplotlib_terrain_npz_viewer.py): Export된 `.npz` 지형 메시를 읽어 heightmap과 3D surface로 확인하는 Matplotlib 뷰어입니다.
+* [main_pygame_terrain_npz_viewer.py](implementations/terrain_npz_viewer_pygame/main_pygame_terrain_npz_viewer.py): Export된 `.npz` 지형 메시를 CPU에서 색상화한 2D heightmap으로 빠르게 확인하는 pygame-ce 뷰어입니다.
+* [main_gpu_terrain_npz_viewer.py](implementations/terrain_npz_viewer_gpu/main_gpu_terrain_npz_viewer.py): Export된 `.npz` 지형 메시를 제너레이터와 같은 ModernGL 렌더 셰이더로 보고, `Loaded Terrain` 패널에 파일 경로와 grid/triangle/height 같은 기본 사양을 표시하는 GPU 뷰어입니다.
 
 ### 5. GPU Marching Squares 구현
 * [main_simplex_2d_gpu_marching_squares.py](implementations/gpu_marching_squares/main_simplex_2d_gpu_marching_squares.py): 2D simplex 밀도장 `d = func(x, y, t)`에서 Marching Squares로 등고선 선분을 추출하고, 공통 파라미터 기반 필드 모드(Single/fBm/Ridged/Billow)를 전환합니다.
@@ -52,6 +56,7 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 
 ### 8. 기술 문서
 * [gui_architecture_qa.md](docs/gui_architecture_qa.md): 최적화(FPS, dt) 및 전문 GUI 연동 아키텍처 기술 Q&A 백서입니다.
+* [terrain_generation_options.md](docs/terrain_generation_options.md): 정적 지형 생성 유틸리티에서 선택할 수 있는 레이어 종류와 속성 옵션 설명입니다.
 * [terrain_imgui_widget.md](docs/terrain_imgui_widget.md): 정적 지형 생성 유틸리티의 ImGui 위젯 패널 구현 기록입니다.
 * [noise_complexity_comparison.md](docs/noise_complexity_comparison.md): 펄린 노이즈와 심플렉스 노이즈의 차원별 연산 절차 및 수학적 복잡도 분석 문서입니다.
 * [terrain_synthesis_methods.md](docs/terrain_synthesis_methods.md): 단순 노이즈를 사실적인 산맥, 평야, 협곡 등으로 결합 및 가공하는 지형 합성 이론 가이드입니다.
@@ -78,8 +83,11 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 * **GPU 높이장 버전**: `uv run .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py` (또는 `python .\implementations\gpu_heightfield\main_opensimplex_2014_gpu.py`)
 
 #### 정적 지형 생성 유틸리티 실행:
-* **GPU 레이어 UI 버전**: `uv run .\implementations\gpu_terrain_generation\main_gpu_terrain_generator.py`
-* **CPU 레이어 UI 버전**: `uv run .\implementations\cpu_terrain_generation\main_cpu_terrain_generator.py`
+* **GPU 레이어 UI 버전**: `uv run .\implementations\terrain_generation_gpu\main_gpu_terrain_generator.py`
+* **CPU 레이어 UI 버전**: `uv run .\implementations\terrain_generation_cpu\main_cpu_terrain_generator.py`
+* **Matplotlib Export 뷰어**: `uv run .\implementations\terrain_npz_viewer_matplotlib\main_matplotlib_terrain_npz_viewer.py`
+* **pygame-ce CPU Export 뷰어**: `uv run .\implementations\terrain_npz_viewer_pygame\main_pygame_terrain_npz_viewer.py`
+* **GPU Export 뷰어**: `uv run .\implementations\terrain_npz_viewer_gpu\main_gpu_terrain_npz_viewer.py`
 
 #### 등가집합 추출 실행:
 * **GPU Marching Squares 버전**: `uv run .\implementations\gpu_marching_squares\main_simplex_2d_gpu_marching_squares.py` (또는 `python .\implementations\gpu_marching_squares\main_simplex_2d_gpu_marching_squares.py`)
@@ -105,6 +113,11 @@ ModernGL과 GLSL 셰이더를 활용하여 GPU 상에서 실시간으로 3D 펄�
 
 GPU/CPU 레이어 UI 버전은 같은 조작을 사용합니다.
 창 좌측의 ImGui 패널에서도 같은 기능을 버튼, 체크박스, 콤보박스, 슬라이더로 조작할 수 있습니다.
+ImGui `Export` 버튼은 현재 지형 메시를 `exports/terrain_generation/*.npz`로 저장합니다.
+Matplotlib 뷰어는 경로를 생략하면 가장 최근 export 파일을 열고, 파일을 지정하면 해당 `.npz`를 엽니다.
+pygame-ce CPU 뷰어는 같은 파일을 2D heightmap으로 표시합니다.
+GPU Export 뷰어도 경로를 생략하면 가장 최근 CPU/GPU export 파일을 열고, 제너레이터와 같은 셰이더로 렌더링합니다.
+GPU Export 뷰어의 `Loaded Terrain` 패널은 로딩된 파일과 기본 메시 사양을 표시합니다.
 
 | 조작 키 / 마우스 | 기능 설명 |
 | :--- | :--- |

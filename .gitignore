@@ -12,3 +12,4 @@ wheels/
 # Output assets
 *.png
 *.mp4
+exports/

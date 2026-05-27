@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import os
 from typing import Any
 
 import imgui
@@ -112,52 +113,59 @@ class TerrainImguiPanel:
             self.io.mouse_down[1] = pressed
 
     def _draw_panel(self, app: Any) -> None:
-        imgui.set_next_window_position(16, 16, condition=imgui.ALWAYS)
+        imgui.set_next_window_position(16, 16, condition=imgui.FIRST_USE_EVER)
         imgui.set_next_window_size(
             self.panel_width,
             self.panel_height,
-            condition=imgui.ALWAYS,
+            condition=imgui.FIRST_USE_EVER,
         )
-        imgui.begin(
-            "Terrain Controls",
-            flags=imgui.WINDOW_NO_COLLAPSE,
-        )
+        expanded, _ = imgui.begin("Terrain Controls")
 
-        imgui.text(f"{self.backend_label} Terrain Heightfield")
-        imgui.text(f"FPS: {app.fps_val:.1f}")
-        if self.get_build_ms is not None:
+        if expanded:
+            imgui.text(f"{self.backend_label} Terrain Heightfield")
+            imgui.text(f"FPS: {app.fps_val:.1f}")
+            if self.get_build_ms is not None:
+                imgui.same_line()
+                imgui.text(f"Build: {self.get_build_ms():.2f} ms")
+
+            changed, resolution = imgui.slider_int(
+                "Resolution",
+                int(app.resolution),
+                32,
+                512,
+                format="%d",
+            )
+            if changed:
+                app.resolution = int(resolution)
+                app.rebuild_grid()
+
+            changed, palette = imgui.combo(
+                "Palette",
+                int(app.palette),
+                self.palette_names,
+            )
+            if changed:
+                app.palette = int(palette)
+
+            if imgui.button("Reset Terrain"):
+                app.stack.reset_default()
+                app.selected_layer = 0
+                app.upload_terrain_stack()
             imgui.same_line()
-            imgui.text(f"Build: {self.get_build_ms():.2f} ms")
+            if imgui.button("Reset Camera"):
+                app.reset_camera()
+            imgui.same_line()
+            if imgui.button("Export"):
+                app.export_terrain()
+            if getattr(app, "last_export_path", ""):
+                imgui.text_wrapped(f"Exported: {os.path.basename(app.last_export_path)}")
 
-        changed, resolution = imgui.slider_int(
-            "Resolution",
-            int(app.resolution),
-            32,
-            512,
-            format="%d",
-        )
-        if changed:
-            app.resolution = int(resolution)
-            app.rebuild_grid()
-
-        changed, palette = imgui.combo("Palette", int(app.palette), self.palette_names)
-        if changed:
-            app.palette = int(palette)
-
-        if imgui.button("Reset Terrain"):
-            app.stack.reset_default()
-            app.selected_layer = 0
-            app.upload_terrain_stack()
-        imgui.same_line()
-        if imgui.button("Reset Camera"):
-            app.reset_camera()
-
-        imgui.separator()
-        self._draw_add_buttons(app)
-        imgui.separator()
-        self._draw_layer_list(app)
-        imgui.separator()
-        self._draw_selected_layer_editor(app)
+            imgui.separator()
+            self._draw_add_buttons(app)
+            imgui.separator()
+            self._draw_layer_list(app)
+            imgui.separator()
+            self._draw_selected_layer_editor(app)
 
         imgui.end()
 

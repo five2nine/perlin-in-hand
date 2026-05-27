@@ -4,10 +4,12 @@
 
 정적 지형 생성 유틸리티의 CPU/GPU 버전에 같은 위젯 인터페이스를 제공한다. 키보드 단축키는 유지하고, 같은 작업을 ImGui 패널에서도 수행할 수 있게 한다.
 
+사용자가 선택할 수 있는 지형 종류와 속성의 의미는 [terrain_generation_options.md](terrain_generation_options.md)에 정리한다.
+
 ## 적용 대상
 
-- `implementations/gpu_terrain_generation/main_gpu_terrain_generator.py`
-- `implementations/cpu_terrain_generation/main_cpu_terrain_generator.py`
+- `implementations/terrain_generation_gpu/main_gpu_terrain_generator.py`
+- `implementations/terrain_generation_cpu/main_cpu_terrain_generator.py`
 - `implementations/terrain_generation_common/terrain_imgui.py`
 
 ## 패널 구성
@@ -16,6 +18,7 @@
 
 - 상태 표시: 백엔드 이름, FPS, GPU bake 또는 CPU compute 시간
 - 전역 설정: 해상도 슬라이더, 팔레트 콤보, 지형 초기화, 카메라 초기화
+- 출력: 현재 지형 메시를 `.npz` 파일로 저장하는 Export 버튼
 - 레이어 추가: Random, Simple 1/2/3 Oct, Valley, Billow, Ridged, Warped 버튼
 - 레이어 목록: enabled 체크박스, 선택 가능한 레이어 요약, 삭제 버튼
 - 선택 레이어 편집: octaves, frequency, amplitude, persistence, lacunarity, valley power, warp strength, warp frequency
@@ -30,7 +33,7 @@
 
 CPU/GPU 지형 창은 `WindowConfig.aspect_ratio = None`으로 fixed viewport를 끈다. 기본 fixed viewport가 켜져 있으면 리사이즈 후 ModernGL-window의 내부 viewport와 ImGui의 전체 창 좌표가 달라져 버튼 히트 영역이 어긋난다. 카메라 투영은 각 앱의 `on_resize()`에서 현재 창 비율로 갱신한다.
 
-`TerrainImguiPanel`은 렌더링 직전에 현재 `window.size`와 `window.buffer_size`를 다시 읽어 `io.display_size`와 `io.display_fb_scale`을 갱신한다. 패널 위치와 크기도 매 프레임 좌측 상단 기준으로 다시 지정한다. 창이 작아지면 패널 폭/높이와 레이어 목록 높이를 줄여 CPU/GPU 양쪽에서 리사이즈 뒤에도 위젯 배치가 창 안에 남도록 한다.
+`TerrainImguiPanel`은 렌더링 직전에 현재 `window.size`와 `window.buffer_size`를 다시 읽어 `io.display_size`와 `io.display_fb_scale`을 갱신한다. 패널 위치와 크기는 첫 실행 때만 기본값을 제안하고, 이후에는 ImGui의 이동/크기 변경/접기 상태를 유지한다. 창이 작아지면 새로 만드는 첫 패널의 기본 폭/높이와 레이어 목록 높이만 줄인다.
 
 레이어 추가 버튼은 작은 프리셋 묶음으로 유지한다. `Random`은 레이어 종류, 옥타브, 나머지 속성을 모두 랜덤으로 만든다. `1/2/3 Oct`는 Simple 레이어의 옥타브만 고정하고 나머지 속성은 랜덤으로 만든다. Valley, Billow, Ridged, Warped 버튼은 해당 레이어 종류를 학습용 프리셋처럼 빠르게 추가하고, 옥타브와 세부 속성은 랜덤으로 둔다. 세부 조정은 선택 레이어 편집 영역에서 한다.
 
