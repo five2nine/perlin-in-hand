@@ -137,6 +137,10 @@ position = direction * (1 + height)
 기존 terrain 렌더 셰이더로 표시
 ```
 
+현재 케이스의 기본값은 `subdivisions = 6`이고, 실험 상한은 8이다. `subdivisions = 8`은 약 1,310,720개 삼각형을 만들므로 높은 octave 관찰에는 유리하지만, 메쉬 생성과 업로드 비용도 커진다.
+
+ModernGL 창은 카메라가 멈춰 있어도 렌더 루프를 계속 돈다. 그래서 고밀도 구면 mesh는 영상 재생이나 애니메이션이 없어도 GPU 사용량을 만들 수 있다. 현재 케이스는 입력 중에는 `active-fps`를 쓰고, 움직임이 없으면 `idle-fps`로 내려가도록 제한한다. 기본값은 active 60FPS, idle 12FPS다.
+
 코드 위치:
 
 ```text
@@ -258,6 +262,138 @@ barycentric coordinate로 보간한다.
 5. `amplitude`를 키워 radial displacement가 실루엣에 미치는 영향을 본다.
 6. `seed`를 바꿔 위도 밴드 통계가 한 seed의 우연인지 반복 경향인지 본다.
 7. `subdivisions`를 낮춰 메쉬 해상도가 낮을 때 noise가 어떻게 계단처럼 보이는지 본다.
+8. `subdivisions`를 7 또는 8로 올려 높은 octave 디테일을 더 촘촘한 vertex 샘플로 표현해 본다.
+
+## 오른쪽 상단 좌표 표시기
+
+실행 화면 오른쪽 상단에는 작은 구면 좌표 표시기가 있다. 이것은 지형 자체를 다시 그리는 미니맵이 아니라, 현재 카메라에서 구면 좌표 기준이 어떻게 보이는지 알려주는 orientation gizmo다.
+
+현재 좌표 기준은 다음과 같다.
+
+```text
+north pole = +Y
+longitude 0 = +X on equator
+longitude +90 = +Z on equator
+longitude -90 = -Z on equator
+```
+
+표시기 안의 `N`은 북극이다. `0`, `+90`, `-90`은 각각 적도 위의 기준 경도 방향이다. 경선은 앞쪽 반구에서는 밝게, 뒤쪽 반구에서는 흐리게 그린다. 그래서 카메라를 회전하면 어떤 기준 경선이 앞쪽으로 왔는지, 북극이 화면에서 어느 방향으로 기울었는지 바로 볼 수 있다.
+
+`view`는 현재 카메라 위치를 구면 방향으로 환산한 경도/위도 값이다. 이 값은 지형의 물리 좌표가 바뀌었다는 뜻이 아니라, 사용자가 어느 방향에서 구를 보고 있는지 나타내는 보기 좌표다.
+
+## 질문과 답변 기록
+
+### Q. 3D 노이즈 샘플링을 쓰면 적도와 극점에서 특성이 달라지는가?
+
+위도/경도 UV로 2D 노이즈를 샘플링하면 적도와 극점의 특성이 달라진다. 같은 `u` 간격이 적도에서는 넓은 표면 거리를 뜻하고, 극점 근처에서는 좁은 표면 거리를 뜻하기 때문이다. 극점에서는 경도가 한 점으로 모이는 특이점도 생긴다.
+
+현재 구면 케이스는 UV를 쓰지 않고 3D 방향 벡터를 사용한다.
+
+```text
+height = noise3(normalize(position) * frequency)
+```
+
+이 방식에서는 북극과 남극이 특별한 UV 좌표가 아니라 3D 공간의 방향 벡터다. 따라서 UV 매핑 때문에 생기는 극점 압축은 직접 나타나지 않는다. 다만 유한한 메쉬 샘플 수, icosphere 면적 분포, 3D cubic lattice noise의 약한 축 방향성은 별도로 남을 수 있다.
+
+### Q. 현재 스피어 terrain은 여러 레이어를 갖는가?
+
+현재 스피어 terrain은 평면 terrain generator처럼 레이어 스택을 갖지 않는다. 구조는 단일 fBm 레이어다.
+
+```text
+sphere terrain = one fBm noise layer
+one fBm layer = multiple octaves
+```
+
+따라서 `octaves`는 있다. 하지만 `Simple + Valley + Warped`처럼 여러 레이어를 더하는 구조는 아직 없다.
+
+### Q. Subdivision은 구면을 몇 등분한다는 뜻인가?
+
+아니다. `subdivisions = 5`는 구면을 5등분한다는 뜻이 아니다. Icosphere는 정이십면체에서 시작한다.
+
+```text
+subdivisions 0: 20 triangles
+subdivisions 1: 80 triangles
+subdivisions 2: 320 triangles
+subdivisions 3: 1,280 triangles
+subdivisions 4: 5,120 triangles
+subdivisions 5: 20,480 triangles
+subdivisions 6: 81,920 triangles
+subdivisions 7: 327,680 triangles
+subdivisions 8: 1,310,720 triangles
+```
+
+Subdivision은 각 삼각형을 네 개로 쪼개는 반복 횟수다. 평면 terrain의 `resolution`과 비슷하게, 구면 terrain에서는 기하 샘플 밀도를 정한다.
+
+### Q. Subdivision과 octave는 같이 올려야 하는가?
+
+그렇다. `octaves`는 노이즈가 만들려는 작은 디테일의 수를 늘린다. `subdivisions`는 그 디테일을 실제 구면 메쉬가 표현할 수 있는 샘플 수를 늘린다.
+
+Octave만 올리고 subdivision이 낮으면 작은 디테일이 vertex 샘플에 잡히지 않는다. 이 경우 삼각형 단위로 어색한 요철, 계단감, 반짝임이 생길 수 있다.
+
+현재 감각은 다음과 같다.
+
+```text
+subdivisions 4: 낮은 octave 관찰용
+subdivisions 5: 중간 octave 관찰용
+subdivisions 6: 기본값, octave 5 전후 관찰용
+subdivisions 7: 더 높은 디테일 관찰용
+subdivisions 8: 고밀도 실험용
+```
+
+### Q. 삼각형 내부에도 terrain 샘플을 찍는가?
+
+현재 구현은 삼각형 내부에 별도 샘플을 찍지 않는다. Subdivision으로 만들어진 fine mesh의 vertex가 샘플링 포인트다.
+
+```text
+sample point = each icosphere vertex direction
+```
+
+각 vertex에서 3D noise를 샘플링하고, 그 height로 vertex를 radial 방향으로 이동한다. 삼각형 내부는 GPU rasterizer가 세 vertex 사이를 선형 보간해서 채운다. 따라서 렌더 triangle 자체가 현재 terrain 기하의 최소 단위다.
+
+삼각형 내부까지 더 세밀하게 샘플링하려면 GPU tessellation shader, compute 기반 mesh 생성, 더 높은 CPU subdivision, 또는 fragment shader 기반 시각 효과가 필요하다.
+
+### Q. Subdivision 6도 샘플 수가 작은가?
+
+평면 512x512 terrain과 비교하면 작다.
+
+```text
+sphere subdivisions 6: vertices 40,962 / triangles 81,920
+plane 512x512: vertices 262,144 / triangles 522,242
+```
+
+그래서 복잡한 octave 지형을 보려면 subdivision 7 또는 8이 필요할 수 있다. 현재 케이스는 UI와 명령행에서 최대 8까지 허용한다.
+
+### Q. 화면이 멈춰 있는데 GPU를 쓰는 이유는 무엇인가?
+
+ModernGL 창은 화면 변화가 없어도 렌더 루프를 계속 돈다. 스피어 terrain은 매 프레임 전체 구면 mesh와 ImGui overlay를 다시 그린다. `subdivisions = 8`은 약 131만 triangle이므로, 정지 화면이어도 60FPS로 계속 렌더링하면 GPU 사용량이 높게 나온다.
+
+현재 구현은 이 문제를 줄이기 위해 FPS cap을 둘로 나눈다.
+
+```text
+active-fps = 입력 중 cap
+idle-fps = 움직임이 없을 때 cap
+```
+
+기본값은 active 60FPS, idle 12FPS다. 패널에는 현재 cap이 `Cap: 60` 또는 `Cap: 12`로 표시된다.
+
+명령행에서 조절할 수 있다.
+
+```powershell
+uv run .\implementations\terrain_sphere_3d_noise\main_spherical_terrain_3d_noise.py --active-fps 60 --idle-fps 8
+```
+
+### Q. 오른쪽 상단 구면 표시기는 무엇을 보여주는가?
+
+오른쪽 상단 표시기는 지형 미니맵이 아니라 orientation gizmo다. 구면 좌표 기준이 현재 카메라에서 어떻게 보이는지 알려준다.
+
+```text
+N = north pole = +Y
+0 = longitude 0 = +X
++90 = longitude +90 = +Z
+-90 = longitude -90 = -Z
+```
+
+`view`는 현재 카메라 방향을 구면 경도/위도로 환산한 값이다. 시작점 대비 변화량인 `delta` 표시는 의미가 중복되어 제거했다.
 
 ## 요약
 

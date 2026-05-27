@@ -19,6 +19,10 @@ from moderngl_window.scene import OrbitCamera
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[1]
 SHADER_DIR = PROJECT_ROOT / "implementations" / "terrain_generation_gpu" / "shaders"
+DEFAULT_SUBDIVISIONS = 6
+MAX_SUBDIVISIONS = 8
+DEFAULT_ACTIVE_FPS = 60
+DEFAULT_IDLE_FPS = 12
 
 with open(SHADER_DIR / "terrain_heightfield.vert", "r", encoding="utf-8") as f:
     RENDER_VERTEX_SHADER = f.read()
@@ -29,7 +33,7 @@ with open(SHADER_DIR / "terrain_heightfield.frag", "r", encoding="utf-8") as f:
 
 @dataclass(frozen=True)
 class SphereTerrainConfig:
-    subdivisions: int = 5
+    subdivisions: int = DEFAULT_SUBDIVISIONS
     frequency: float = 3.2
     amplitude: float = 0.12
     octaves: int = 5
@@ -38,25 +42,36 @@ class SphereTerrainConfig:
     seed: float = 41.0
 
 
+@dataclass(frozen=True)
+class GizmoProjection:
+    x: float
+    y: float
+    depth: float
+
+
 def parse_case_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     parser = argparse.ArgumentParser(
         description="Spherical terrain case using 3D noise sampled by direction vectors.",
         add_help=False,
     )
-    parser.add_argument("--subdivisions", type=int, default=5)
+    parser.add_argument("--subdivisions", type=int, default=DEFAULT_SUBDIVISIONS)
     parser.add_argument("--frequency", type=float, default=3.2)
     parser.add_argument("--amplitude", type=float, default=0.12)
     parser.add_argument("--octaves", type=int, default=5)
     parser.add_argument("--seed", type=float, default=41.0)
+    parser.add_argument("--active-fps", type=int, default=DEFAULT_ACTIVE_FPS)
+    parser.add_argument("--idle-fps", type=int, default=DEFAULT_IDLE_FPS)
     parser.add_argument("--analyze-only", action="store_true")
     parser.add_argument("--help-case", action="store_true")
 
     args = argparse.Namespace(
-        subdivisions=5,
+        subdivisions=DEFAULT_SUBDIVISIONS,
         frequency=3.2,
         amplitude=0.12,
         octaves=5,
         seed=41.0,
+        active_fps=DEFAULT_ACTIVE_FPS,
+        idle_fps=DEFAULT_IDLE_FPS,
         analyze_only=False,
         help_case=False,
     )
@@ -67,6 +82,8 @@ def parse_case_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         "--amplitude",
         "--octaves",
         "--seed",
+        "--active-fps",
+        "--idle-fps",
     }
     mglw_value_options = {
         "-wnd",
@@ -125,7 +142,7 @@ def parse_case_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
 
 
 def _parse_case_value(option: str, value: str) -> int | float:
-    if option in {"--subdivisions", "--octaves"}:
+    if option in {"--subdivisions", "--octaves", "--active-fps", "--idle-fps"}:
         return int(value)
     return float(value)
 
@@ -186,7 +203,7 @@ def make_icosahedron() -> tuple[np.ndarray, np.ndarray]:
 
 
 def make_icosphere(subdivisions: int) -> tuple[np.ndarray, np.ndarray]:
-    subdivisions = max(0, min(7, int(subdivisions)))
+    subdivisions = max(0, min(MAX_SUBDIVISIONS, int(subdivisions)))
     vertices, faces = make_icosahedron()
     vertex_list = [vertex for vertex in vertices]
     face_list = [tuple(int(index) for index in face) for face in faces]
@@ -380,6 +397,27 @@ def compute_latitude_stats(directions: np.ndarray, heights: np.ndarray) -> list[
     return results
 
 
+def direction_from_lon_lat(lon_deg: float, lat_deg: float) -> np.ndarray:
+    lon = math.radians(lon_deg)
+    lat = math.radians(lat_deg)
+    cos_lat = math.cos(lat)
+    return np.array(
+        [
+            cos_lat * math.cos(lon),
+            math.sin(lat),
+            cos_lat * math.sin(lon),
+        ],
+        dtype=np.float64,
+    )
+
+
+def lon_lat_from_direction(direction: np.ndarray) -> tuple[float, float]:
+    normal = direction / max(float(np.linalg.norm(direction)), 1e-12)
+    lon = math.degrees(math.atan2(float(normal[2]), float(normal[0])))
+    lat = math.degrees(math.asin(max(-1.0, min(1.0, float(normal[1])))))
+    return lon, lat
+
+
 class SphereTerrainPanel:
     def __init__(self, window: Any) -> None:
         imgui.create_context()
@@ -478,6 +516,8 @@ class SphereTerrainPanel:
         if expanded:
             imgui.text("3D noise sampled by sphere direction")
             imgui.text(f"FPS: {app.fps_val:.1f}")
+            imgui.same_line()
+            imgui.text(f"Cap: {app.current_fps_cap:d}")
             imgui.separator()
 
             changed = False
@@ -485,7 +525,7 @@ class SphereTerrainPanel:
                 "Subdivisions",
                 app.config.subdivisions,
                 1,
-                6,
+                MAX_SUBDIVISIONS,
             )
             changed_frequency, frequency = imgui.slider_float(
                 "Frequency",
@@ -537,10 +577,12 @@ class SphereTerrainPanel:
             )
             if changed_palette:
                 app.palette = palette
+                app.mark_active()
 
             changed_wireframe, wireframe = imgui.checkbox("Wireframe", app.wireframe)
             if changed_wireframe:
                 app.wireframe = wireframe
+                app.mark_active()
 
             if imgui.button("Reset Camera"):
                 app.reset_camera()
@@ -561,6 +603,141 @@ class SphereTerrainPanel:
             imgui.separator()
             imgui.text("Mouse drag rotate | Wheel zoom | C palette | W wire")
         imgui.end()
+        self._draw_orientation_gizmo(app)
+
+    def _draw_orientation_gizmo(self, app: Any) -> None:
+        width, _height = self.window.size
+        size = 188.0
+        margin = 18.0
+        center_x = float(width) - margin - size * 0.5
+        center_y = margin + size * 0.5
+        radius = size * 0.32
+
+        draw_list = imgui.get_foreground_draw_list()
+        color_panel = imgui.get_color_u32_rgba(0.03, 0.035, 0.04, 0.68)
+        color_outline = imgui.get_color_u32_rgba(0.82, 0.86, 0.82, 0.78)
+        color_back = imgui.get_color_u32_rgba(0.38, 0.43, 0.45, 0.48)
+        color_equator = imgui.get_color_u32_rgba(0.42, 0.66, 0.72, 0.58)
+        color_lon0 = imgui.get_color_u32_rgba(0.95, 0.72, 0.28, 0.92)
+        color_lon90 = imgui.get_color_u32_rgba(0.38, 0.78, 0.95, 0.92)
+        color_lon_neg90 = imgui.get_color_u32_rgba(0.95, 0.46, 0.46, 0.92)
+        color_north = imgui.get_color_u32_rgba(0.94, 0.95, 0.88, 1.0)
+        color_text = imgui.get_color_u32_rgba(0.90, 0.93, 0.90, 0.94)
+
+        left = center_x - size * 0.5
+        top = center_y - size * 0.5
+        right = center_x + size * 0.5
+        bottom = center_y + size * 0.5 + 22.0
+        draw_list.add_rect_filled(left, top, right, bottom, color_panel, 8.0)
+        draw_list.add_circle_filled(center_x, center_y, radius, imgui.get_color_u32_rgba(0.09, 0.12, 0.14, 0.82), 48)
+        draw_list.add_circle(center_x, center_y, radius, color_outline, 64, 1.4)
+
+        basis = self._camera_projection_basis(app)
+        self._draw_gizmo_circle(
+            draw_list,
+            basis,
+            center_x,
+            center_y,
+            radius,
+            lambda t: direction_from_lon_lat(math.degrees(t), 0.0),
+            color_equator,
+            color_back,
+            1.2,
+            closed=True,
+        )
+        for lon, color in [(0.0, color_lon0), (90.0, color_lon90), (-90.0, color_lon_neg90)]:
+            self._draw_gizmo_circle(
+                draw_list,
+                basis,
+                center_x,
+                center_y,
+                radius,
+                lambda t, lon=lon: direction_from_lon_lat(lon, math.degrees(t)),
+                color,
+                color_back,
+                1.8,
+                closed=False,
+                t_min=-math.pi * 0.5,
+                t_max=math.pi * 0.5,
+            )
+
+        markers = [
+            ("N", np.array([0.0, 1.0, 0.0], dtype=np.float64), color_north),
+            ("0", np.array([1.0, 0.0, 0.0], dtype=np.float64), color_lon0),
+            ("+90", np.array([0.0, 0.0, 1.0], dtype=np.float64), color_lon90),
+            ("-90", np.array([0.0, 0.0, -1.0], dtype=np.float64), color_lon_neg90),
+        ]
+        for label, direction, color in markers:
+            point = self._project_direction(direction, basis, center_x, center_y, radius)
+            marker_color = color if point.depth >= 0.0 else color_back
+            draw_list.add_circle_filled(point.x, point.y, 4.0 if label == "N" else 3.5, marker_color, 16)
+            draw_list.add_text(point.x + 5.0, point.y - 7.0, marker_color, label)
+
+        view_lon, view_lat = lon_lat_from_direction(np.asarray(app.camera.position, dtype=np.float64))
+        draw_list.add_text(
+            left + 10.0,
+            bottom - 17.0,
+            color_text,
+            f"view {view_lon:+.1f}/{view_lat:+.1f}",
+        )
+
+    def _camera_projection_basis(
+        self,
+        app: Any,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        view_dir = np.asarray(app.camera.position, dtype=np.float64)
+        view_dir = view_dir / max(float(np.linalg.norm(view_dir)), 1e-12)
+        world_up = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+        right = np.cross(world_up, view_dir)
+        if float(np.linalg.norm(right)) < 1e-6:
+            right = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+        else:
+            right = right / float(np.linalg.norm(right))
+        up = np.cross(view_dir, right)
+        up = up / max(float(np.linalg.norm(up)), 1e-12)
+        return right, up, view_dir
+
+    def _project_direction(
+        self,
+        direction: np.ndarray,
+        basis: tuple[np.ndarray, np.ndarray, np.ndarray],
+        center_x: float,
+        center_y: float,
+        radius: float,
+    ) -> GizmoProjection:
+        right, up, view_dir = basis
+        normal = direction / max(float(np.linalg.norm(direction)), 1e-12)
+        x = float(np.dot(normal, right))
+        y = float(np.dot(normal, up))
+        depth = float(np.dot(normal, view_dir))
+        return GizmoProjection(center_x + x * radius, center_y - y * radius, depth)
+
+    def _draw_gizmo_circle(
+        self,
+        draw_list: Any,
+        basis: tuple[np.ndarray, np.ndarray, np.ndarray],
+        center_x: float,
+        center_y: float,
+        radius: float,
+        direction_at: Any,
+        front_color: int,
+        back_color: int,
+        thickness: float,
+        closed: bool,
+        t_min: float = 0.0,
+        t_max: float = math.tau,
+    ) -> None:
+        samples = 96 if closed else 64
+        points = [
+            self._project_direction(direction_at(t), basis, center_x, center_y, radius)
+            for t in np.linspace(t_min, t_max, samples)
+        ]
+        segment_count = len(points) if closed else len(points) - 1
+        for index in range(segment_count):
+            a = points[index]
+            b = points[(index + 1) % len(points)]
+            color = front_color if (a.depth + b.depth) * 0.5 >= 0.0 else back_color
+            draw_list.add_line(a.x, a.y, b.x, b.y, color, thickness)
 
 
 class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
@@ -605,12 +782,15 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         self.terrain_vbo = None
         self.ebo = None
         self.render_vao = None
+        self.last_time = time.perf_counter()
+        self.active_fps = max(1, int(CASE_ARGS.active_fps))
+        self.idle_fps = max(1, int(CASE_ARGS.idle_fps))
+        self.current_fps_cap = self.active_fps
+        self.active_until = self.last_time + 0.8
         self.rebuild_mesh()
 
         self.fps_timer = 0.0
         self.frame_count = 0
-        self.last_time = time.perf_counter()
-        self.target_fps = 60
         self.fps_val = 0.0
         self.ui = SphereTerrainPanel(self.wnd)
 
@@ -618,6 +798,7 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         print("Spherical Terrain - 3D Noise Sampling")
         print("-" * 72)
         print("Controls: mouse drag rotate, wheel zoom, C palette, W wireframe, HOME reset")
+        print(f"Frame cap: active={self.active_fps} fps, idle={self.idle_fps} fps")
         print("Use --analyze-only to print latitude-band statistics without opening a window.")
         print("=" * 72)
 
@@ -643,16 +824,22 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
             f"subdiv={self.config.subdivisions} | "
             f"verts={self.mesh['vertices'].shape[0]:,}"
         )
+        self.mark_active(0.8)
+
+    def mark_active(self, duration: float = 0.45) -> None:
+        self.active_until = max(self.active_until, time.perf_counter() + duration)
 
     def reset_camera(self) -> None:
         self.camera.radius = 3.0
         self.camera.angle_x = 35.0
         self.camera.angle_y = -35.0
+        self.mark_active()
 
     def on_render(self, time_since_start: float, frametime: float):
         now = time.perf_counter()
         elapsed = now - self.last_time
-        target_time = 1.0 / self.target_fps
+        self.current_fps_cap = self.active_fps if now < self.active_until else self.idle_fps
+        target_time = 1.0 / max(self.current_fps_cap, 1)
         if elapsed < target_time:
             time.sleep(target_time - elapsed)
             now = time.perf_counter()
@@ -697,13 +884,16 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
             return
         if key == self.wnd.keys.C:
             self.palette = (self.palette + 1) % len(self.palette_names)
+            self.mark_active()
         elif key == self.wnd.keys.W:
             self.wireframe = not self.wireframe
+            self.mark_active()
         elif key == self.wnd.keys.HOME:
             self.reset_camera()
 
     def on_mouse_drag_event(self, x, y, dx, dy):
         self.ui.mouse_drag_event(x, y, dx, dy)
+        self.mark_active()
         if self.ui.wants_mouse:
             return
         if abs(dx) > 100 or abs(dy) > 100:
@@ -714,18 +904,23 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
 
     def on_mouse_scroll_event(self, x_offset, y_offset):
         self.ui.mouse_scroll_event(x_offset, y_offset)
+        self.mark_active()
         if self.ui.wants_mouse:
             return
         self.camera.radius = max(0.4, self.camera.radius - y_offset * self.camera.zoom_sensitivity)
 
     def on_mouse_position_event(self, x, y, dx, dy):
         self.ui.mouse_position_event(x, y, dx, dy)
+        if dx != 0 or dy != 0:
+            self.mark_active(0.15)
 
     def on_mouse_press_event(self, x, y, button):
         self.ui.mouse_press_event(x, y, button)
+        self.mark_active()
 
     def on_mouse_release_event(self, x, y, button):
         self.ui.mouse_release_event(x, y, button)
+        self.mark_active()
 
     def on_unicode_char_entered(self, char):
         self.ui.unicode_char_entered(char)
