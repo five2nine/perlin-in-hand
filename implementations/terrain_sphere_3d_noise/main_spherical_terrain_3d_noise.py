@@ -383,6 +383,18 @@ def build_spherical_terrain(config: SphereTerrainConfig) -> dict[str, Any]:
     }
 
 
+def compute_gpu_subdivision_counts(subdivisions: int) -> dict[str, int]:
+    subdivisions = max(0, min(MAX_SUBDIVISIONS, int(subdivisions)))
+    steps = 1 << subdivisions
+    triangle_count = 20 * steps * steps
+    return {
+        "subdivision_steps": steps,
+        "logical_vertices": 10 * (4**subdivisions) + 2,
+        "draw_vertices": triangle_count * 3,
+        "triangle_count": triangle_count,
+    }
+
+
 def compute_latitude_stats(directions: np.ndarray, heights: np.ndarray) -> list[dict[str, float | int | str]]:
     lat = np.degrees(np.arcsin(np.clip(directions[:, 1], -1.0, 1.0)))
     bands = [
@@ -607,18 +619,29 @@ class SphereTerrainPanel:
                 app.reset_camera()
 
             imgui.separator()
-            imgui.text(f"Vertices: {app.mesh['vertices'].shape[0]:,}")
-            imgui.text(f"Triangles: {app.mesh['indices_tri'].shape[0]:,}")
+            imgui.text(f"Logical vertices: {app.mesh['logical_vertices']:,}")
+            imgui.text(f"Draw vertices: {app.mesh['draw_vertices']:,}")
+            imgui.text(f"Triangles: {app.mesh['triangle_count']:,}")
             imgui.text(
                 f"Height: {app.mesh['height_min']:.6f} .. {app.mesh['height_max']:.6f}"
             )
+            if not app.mesh.get("height_range_exact", False):
+                imgui.same_line()
+                imgui.text("(bound)")
+            if imgui.button("Read GPU Stats"):
+                app.read_gpu_stats()
+            imgui.same_line()
+            imgui.text(f"Stats read: {app.last_stats_ms:.2f} ms")
             imgui.separator()
             imgui.text("Latitude bands")
-            for stat in app.mesh["stats"]:
-                imgui.text(
-                    f"{stat['name']}: n={stat['count']}, "
-                    f"std={stat['std']:.5f}, mean={stat['mean']:.5f}"
-                )
+            if app.mesh["stats"]:
+                for stat in app.mesh["stats"]:
+                    imgui.text(
+                        f"{stat['name']}: n={stat['count']}, "
+                        f"std={stat['std']:.5f}, mean={stat['mean']:.5f}"
+                    )
+            else:
+                imgui.text("Press Read GPU Stats for exact band values")
             imgui.separator()
             imgui.text("Mouse drag rotate | Wheel zoom | C palette | W wire")
         imgui.end()
@@ -799,11 +822,10 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         self.model_matrix = np.eye(4, dtype="f4")
         self.model_matrix_bytes = self.model_matrix.tobytes()
         self.mesh: dict[str, Any] = {}
-        self.direction_vbo = None
         self.terrain_vbo = None
-        self.ebo = None
         self.render_vao = None
         self.last_build_ms = 0.0
+        self.last_stats_ms = 0.0
         self.last_time = time.perf_counter()
         self.active_fps = max(1, int(CASE_ARGS.active_fps))
         self.idle_fps = max(1, int(CASE_ARGS.idle_fps))
@@ -819,14 +841,15 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         print("=" * 72)
         print("Spherical Terrain - 3D Noise Sampling")
         print("-" * 72)
-        print("Terrain build: GPU compute shader for height, position, and normals")
+        print("Terrain build: GPU compute shader for subdivision, height, position, and normals")
         print("Controls: mouse drag rotate, wheel zoom, C palette, W wireframe, HOME reset")
         print(f"Frame cap: active={self.active_fps} fps, idle={self.idle_fps} fps")
         print("Use --analyze-only to print latitude-band statistics without opening a window.")
         print("=" * 72)
 
     def _set_compute_uniforms(self) -> None:
-        self.compute_prog["u_vertex_count"].value = int(self.mesh["directions"].shape[0])
+        self.compute_prog["u_draw_vertex_count"].value = int(self.mesh["draw_vertices"])
+        self.compute_prog["u_subdivision_steps"].value = int(self.mesh["subdivision_steps"])
         self.compute_prog["u_octaves"].value = int(self.config.octaves)
         self.compute_prog["u_frequency"].value = float(self.config.frequency)
         self.compute_prog["u_amplitude"].value = float(self.config.amplitude)
@@ -834,33 +857,45 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
         self.compute_prog["u_lacunarity"].value = float(self.config.lacunarity)
         self.compute_prog["u_seed"].value = float(self.config.seed)
 
-    def _read_computed_vertices(self) -> None:
+    def _set_bounded_mesh_stats(self) -> None:
+        height_bound = max(abs(float(self.config.amplitude)), 0.001)
+        self.mesh["height_min"] = -float(self.config.amplitude)
+        self.mesh["height_max"] = float(self.config.amplitude)
+        self.mesh["height_scale"] = height_bound
+        self.mesh["height_range_exact"] = False
+        self.mesh["stats"] = []
+
+    def read_gpu_stats(self) -> None:
+        if self.terrain_vbo is None:
+            return
+        start = time.perf_counter()
         vertices = np.frombuffer(self.terrain_vbo.read(), dtype="f4").reshape((-1, 7)).copy()
         heights = vertices[:, 6].copy()
-        self.mesh["vertices"] = vertices
-        self.mesh["positions"] = vertices[:, 0:3].copy()
-        self.mesh["normals"] = vertices[:, 3:6].copy()
-        self.mesh["heights"] = heights
-        self.mesh["stats"] = compute_latitude_stats(self.mesh["directions"], heights)
+        positions = vertices[:, 0:3].copy()
+        length = np.linalg.norm(positions, axis=1, keepdims=True)
+        directions = positions / np.maximum(length, 1e-12)
+        self.mesh["stats"] = compute_latitude_stats(directions, heights)
         self.mesh["height_min"] = float(np.min(heights))
         self.mesh["height_max"] = float(np.max(heights))
         self.mesh["height_scale"] = max(float(np.max(np.abs(heights))), 0.001)
+        self.mesh["height_range_exact"] = True
+        self.last_stats_ms = (time.perf_counter() - start) * 1000.0
+        self.mark_active(0.8)
 
     def compute_terrain(self) -> None:
-        if self.direction_vbo is None or self.terrain_vbo is None:
+        if self.terrain_vbo is None:
             return
         start = time.perf_counter()
         self._set_compute_uniforms()
-        self.direction_vbo.bind_to_storage_buffer(0)
-        self.terrain_vbo.bind_to_storage_buffer(1)
-        vertex_count = int(self.mesh["directions"].shape[0])
-        self.compute_prog.run(group_x=(vertex_count + 127) // 128)
+        self.terrain_vbo.bind_to_storage_buffer(0)
+        draw_vertex_count = int(self.mesh["draw_vertices"])
+        self.compute_prog.run(group_x=(draw_vertex_count + 127) // 128)
         self.ctx.memory_barrier(
             moderngl.SHADER_STORAGE_BARRIER_BIT
             | moderngl.VERTEX_ATTRIB_ARRAY_BARRIER_BIT
             | moderngl.BUFFER_UPDATE_BARRIER_BIT
         )
-        self._read_computed_vertices()
+        self._set_bounded_mesh_stats()
         self.last_build_ms = (time.perf_counter() - start) * 1000.0
         self.mark_active(0.8)
 
@@ -873,32 +908,22 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
             self.compute_terrain()
 
     def rebuild_mesh(self) -> None:
-        self.mesh = build_spherical_topology(self.config.subdivisions)
+        self.mesh = compute_gpu_subdivision_counts(self.config.subdivisions)
         if self.terrain_vbo is not None:
             self.terrain_vbo.release()
-        if self.direction_vbo is not None:
-            self.direction_vbo.release()
-        if self.ebo is not None:
-            self.ebo.release()
         if self.render_vao is not None:
             self.render_vao.release()
 
-        directions_gpu = np.zeros((self.mesh["directions"].shape[0], 4), dtype="f4")
-        directions_gpu[:, :3] = self.mesh["directions"]
-        self.direction_vbo = self.ctx.buffer(directions_gpu.tobytes())
-        self.terrain_vbo = self.ctx.buffer(reserve=self.mesh["directions"].shape[0] * 7 * 4)
-        self.ebo = self.ctx.buffer(self.mesh["indices"].astype("u4").tobytes())
+        self.terrain_vbo = self.ctx.buffer(reserve=self.mesh["draw_vertices"] * 7 * 4)
         self.render_vao = self.ctx.vertex_array(
             self.render_prog,
             [(self.terrain_vbo, "3f 3f 1f", "in_pos", "in_normal", "in_height")],
-            index_buffer=self.ebo,
-            index_element_size=4,
         )
         self.compute_terrain()
         self.wnd.title = (
             "Spherical Terrain | "
             f"subdiv={self.config.subdivisions} | "
-            f"verts={self.mesh['vertices'].shape[0]:,}"
+            f"triangles={self.mesh['triangle_count']:,}"
         )
 
     def mark_active(self, duration: float = 0.45) -> None:
@@ -941,7 +966,7 @@ class SphericalTerrain3DNoiseApp(mglw.WindowConfig):
                 self.camera.position[2],
             )
         self.render_prog["u_view_pos"].value = view_pos
-        self.render_vao.render(moderngl.TRIANGLES)
+        self.render_vao.render(moderngl.TRIANGLES, vertices=int(self.mesh["draw_vertices"]))
         self.ctx.wireframe = False
 
         self.fps_timer += frametime

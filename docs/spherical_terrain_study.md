@@ -127,11 +127,11 @@ Icosphere는 정이십면체에서 시작해 각 삼각형을 나누고 다시 �
 현재 구면 케이스의 흐름은 다음과 같다.
 
 ```text
-icosahedron 생성
-삼각형 subdivision
-각 vertex를 normalize해서 unit sphere 위로 이동
-direction buffer를 GPU storage buffer로 업로드
+CPU가 subdivisions 값과 uniform 파라미터 전달
 compute shader dispatch
+  정이십면체 base triangle 선택
+  base triangle을 2^subdivisions 격자로 펼침
+  각 draw vertex를 normalize해서 unit sphere 위로 이동
   direction 벡터를 3D fBm noise에 입력
   height 계산
   position = direction * (1 + height)
@@ -140,9 +140,11 @@ compute shader dispatch
 기존 terrain 렌더 셰이더로 표시
 ```
 
-현재 케이스의 기본값은 `subdivisions = 6`이고, 실험 상한은 8이다. `subdivisions = 8`은 약 1,310,720개 삼각형을 만들므로 높은 octave 관찰에는 유리하지만, 토폴로지 생성과 index buffer 업로드 비용도 커진다.
+현재 케이스의 기본값은 `subdivisions = 6`이고, 실험 상한은 8이다. `subdivisions = 8`은 약 1,310,720개 삼각형을 만들므로 높은 octave 관찰에는 유리하지만, draw vertex buffer도 커진다.
 
-현재 compute shader 경로에서 CPU가 담당하는 부분은 `icosphere` 토폴로지 생성이다. GPU가 담당하는 부분은 각 vertex의 height, displaced position, normal 생성이다. 따라서 frequency, amplitude, octave, seed 변경은 topology를 다시 만들지 않고 compute shader만 다시 실행한다. subdivisions 변경은 vertex 수와 triangle 수 자체가 바뀌므로 CPU topology 생성과 GPU terrain 계산을 함께 다시 수행한다.
+현재 compute shader 경로에서 CPU가 담당하는 부분은 subdivisions 값과 noise 파라미터 전달, buffer 크기 재할당이다. GPU가 담당하는 부분은 base triangle subdivision, 각 draw vertex의 height, displaced position, normal 생성이다. 따라서 frequency, amplitude, octave, seed 변경은 buffer 크기를 바꾸지 않고 compute shader만 다시 실행한다. subdivisions 변경은 draw vertex 수와 triangle 수 자체가 바뀌므로 terrain vertex buffer를 다시 잡고 compute shader를 실행한다.
+
+중요한 차이가 하나 있다. 현재 GPU subdivision은 index buffer를 만들지 않고 non-indexed triangle list를 만든다. 그래서 삼각형 경계의 같은 위치도 여러 draw vertex로 중복 저장된다. 논리적 `icosphere` 공유 vertex 수는 기존 공식 `10 * 4^subdivisions + 2`로 표시하고, 실제 렌더링에 들어가는 draw vertex 수는 `triangle_count * 3`으로 표시한다.
 
 ModernGL 창은 카메라가 멈춰 있어도 렌더 루프를 계속 돈다. 그래서 고밀도 구면 mesh는 영상 재생이나 애니메이션이 없어도 GPU 사용량을 만들 수 있다. 현재 케이스는 입력 중에는 `active-fps`를 쓰고, 움직임이 없으면 `idle-fps`로 내려가도록 제한한다. 기본값은 active 60FPS, idle 12FPS다.
 
@@ -195,6 +197,42 @@ noise3(direction * frequency)
 frequency가 낮으면 구 전체에 큰 대륙 같은 덩어리가 생긴다. frequency가 높으면 표면에 작은 산맥과 요철이 늘어난다.
 
 평면의 frequency와 구면의 frequency는 숫자가 같아도 시각적 크기가 완전히 같지 않다. 구면은 닫힌 곡면이고, 보는 방향마다 곡률과 실루엣이 달라지기 때문이다.
+
+## 현재 노이즈의 베이스 그리드와 Seed
+
+현재 GPU 구현에서 terrain vertex는 random seed가 아니다. Terrain vertex는 “노이즈를 어디서 샘플할지”를 정하는 위치다.
+
+```text
+draw vertex index
+  -> 정이십면체 base triangle 안의 subdivision 좌표
+  -> direction = normalize(x, y, z)
+  -> point = direction * frequency + seed_offset
+  -> gradient_noise_3d(point, seed)
+```
+
+여기서 `direction`은 위도/경도 좌표가 아니라 3D 직교좌표계의 방향 벡터다. 즉 구면 위의 점을 `(x, y, z)`로 표현하고, 그 값을 노이즈 공간의 입력 좌표로 그대로 사용한다.
+
+기존 노이즈 개념에서 “베이스 그리드”에 해당하는 것은 terrain mesh가 아니라 3D 노이즈 공간의 정수 cubic lattice다.
+
+```text
+point = (x, y, z)
+cell = floor(point)
+cell의 8개 정수 꼭짓점에서 gradient 생성
+꼭짓점 gradient dot 값을 fade 보간
+```
+
+현재 구현은 각 격자 꼭짓점의 random gradient를 배열로 저장하지 않는다. 대신 정수 cell 좌표와 seed를 `hash3(cell, seed)`에 넣어 deterministic pseudo-random gradient를 즉석에서 만든다. 같은 `cell`과 같은 `seed`는 항상 같은 gradient를 만들고, seed를 바꾸면 전체 gradient field가 바뀐다.
+
+따라서 관계는 다음처럼 나뉜다.
+
+```text
+terrain subdivision mesh = 구면 위 샘플 포인트를 만드는 구조
+noise base grid = 3D XYZ 노이즈 공간의 정수 cubic lattice
+seed = lattice 각 점의 pseudo-random gradient를 바꾸는 전역 규칙
+frequency = 구면 방향 벡터를 noise lattice 안에서 얼마나 크게 확대해 읽는가
+```
+
+이 구조 덕분에 GPU의 각 draw vertex는 서로 독립적으로 height를 계산할 수 있다. 저장된 random texture나 random table이 없어도, 규칙과 seed가 같으면 같은 terrain이 재현된다.
 
 ## fBm과 Octave
 
@@ -446,7 +484,7 @@ for each vertex index on GPU:
 | LOD | 카메라 거리 기반으로 자연스러움 | 가능하지만 직접 구현 |
 | 사고방식 | “그릴 때 더 촘촘히 그린다” | “GPU에서 데이터를 만들어 저장한다” |
 
-현재 스피어 terrain은 compute shader 방식을 선택했다. subdivision된 vertex direction을 입력 buffer로 넣고, compute shader가 noise height, displaced position, normal을 terrain vertex buffer에 저장한다. 이 결과 buffer를 렌더링과 export 양쪽에 쓸 수 있기 때문이다. Tessellation shader는 구면 표면을 실시간으로 촘촘하게 그리는 데 강하지만, 생성된 데이터를 파일이나 분석용 배열로 다루려면 별도 readback 구조가 필요하다.
+현재 스피어 terrain은 compute shader 방식을 선택했다. compute shader가 정이십면체 base triangle을 직접 subdivision하고, noise height, displaced position, normal을 terrain vertex buffer에 저장한다. 이 결과 buffer를 렌더링과 export 양쪽에 쓸 수 있기 때문이다. Tessellation shader는 구면 표면을 실시간으로 촘촘하게 그리는 데 강하지만, 생성된 데이터를 파일이나 분석용 배열로 다루려면 별도 readback 구조가 필요하다.
 
 ### Q. 오른쪽 상단 구면 표시기는 무엇을 보여주는가?
 

@@ -2,15 +2,12 @@
 
 layout(local_size_x = 128) in;
 
-layout(std430, binding = 0) readonly buffer DirectionBuffer {
-    vec4 directions[];
-};
-
-layout(std430, binding = 1) writeonly buffer TerrainBuffer {
+layout(std430, binding = 0) writeonly buffer TerrainBuffer {
     float terrain[];
 };
 
-uniform int u_vertex_count;
+uniform int u_draw_vertex_count;
+uniform int u_subdivision_steps;
 uniform int u_octaves;
 uniform float u_frequency;
 uniform float u_amplitude;
@@ -19,6 +16,94 @@ uniform float u_lacunarity;
 uniform float u_seed;
 
 const float TAU = 6.28318530718;
+const float PHI = 1.61803398875;
+
+vec3 base_vertex(int index) {
+    vec3 vertex = vec3(0.0);
+    if (index == 0) vertex = vec3(-1.0, PHI, 0.0);
+    else if (index == 1) vertex = vec3(1.0, PHI, 0.0);
+    else if (index == 2) vertex = vec3(-1.0, -PHI, 0.0);
+    else if (index == 3) vertex = vec3(1.0, -PHI, 0.0);
+    else if (index == 4) vertex = vec3(0.0, -1.0, PHI);
+    else if (index == 5) vertex = vec3(0.0, 1.0, PHI);
+    else if (index == 6) vertex = vec3(0.0, -1.0, -PHI);
+    else if (index == 7) vertex = vec3(0.0, 1.0, -PHI);
+    else if (index == 8) vertex = vec3(PHI, 0.0, -1.0);
+    else if (index == 9) vertex = vec3(PHI, 0.0, 1.0);
+    else if (index == 10) vertex = vec3(-PHI, 0.0, -1.0);
+    else vertex = vec3(-PHI, 0.0, 1.0);
+    return normalize(vertex);
+}
+
+ivec3 base_face(int index) {
+    if (index == 0) return ivec3(0, 11, 5);
+    if (index == 1) return ivec3(0, 5, 1);
+    if (index == 2) return ivec3(0, 1, 7);
+    if (index == 3) return ivec3(0, 7, 10);
+    if (index == 4) return ivec3(0, 10, 11);
+    if (index == 5) return ivec3(1, 5, 9);
+    if (index == 6) return ivec3(5, 11, 4);
+    if (index == 7) return ivec3(11, 10, 2);
+    if (index == 8) return ivec3(10, 7, 6);
+    if (index == 9) return ivec3(7, 1, 8);
+    if (index == 10) return ivec3(3, 9, 4);
+    if (index == 11) return ivec3(3, 4, 2);
+    if (index == 12) return ivec3(3, 2, 6);
+    if (index == 13) return ivec3(3, 6, 8);
+    if (index == 14) return ivec3(3, 8, 9);
+    if (index == 15) return ivec3(4, 9, 5);
+    if (index == 16) return ivec3(2, 4, 11);
+    if (index == 17) return ivec3(6, 2, 10);
+    if (index == 18) return ivec3(8, 6, 7);
+    return ivec3(9, 8, 1);
+}
+
+vec3 subdivided_direction(vec3 a, vec3 b, vec3 c, int i, int j, int steps) {
+    float u = float(i) / float(steps);
+    float v = float(j) / float(steps);
+    float w = 1.0 - u - v;
+    return normalize(a * w + b * u + c * v);
+}
+
+vec3 direction_for_draw_vertex(uint draw_vertex_index) {
+    int steps = max(u_subdivision_steps, 1);
+    uint triangle_index = draw_vertex_index / 3u;
+    int corner = int(draw_vertex_index - triangle_index * 3u);
+    uint triangles_per_base_face = uint(steps * steps);
+    int base_face_index = int(triangle_index / triangles_per_base_face);
+    int local_triangle = int(triangle_index - uint(base_face_index) * triangles_per_base_face);
+
+    int row = int(floor(float(steps) - sqrt(float(steps * steps - local_triangle))));
+    row = clamp(row, 0, steps - 1);
+    while (local_triangle < row * (2 * steps - row)) {
+        row -= 1;
+    }
+    while (local_triangle >= (row + 1) * (2 * steps - row - 1)) {
+        row += 1;
+    }
+
+    int row_start = row * (2 * steps - row);
+    int remaining = local_triangle - row_start;
+    bool upward = (remaining % 2) == 0;
+    int col = remaining / 2;
+    int i = col;
+    int j = row;
+
+    ivec3 face = base_face(base_face_index);
+    vec3 a = base_vertex(face.x);
+    vec3 b = base_vertex(face.y);
+    vec3 c = base_vertex(face.z);
+
+    if (upward) {
+        if (corner == 0) return subdivided_direction(a, b, c, i, j, steps);
+        if (corner == 1) return subdivided_direction(a, b, c, i + 1, j, steps);
+        return subdivided_direction(a, b, c, i, j + 1, steps);
+    }
+
+    if (corner == 0) return subdivided_direction(a, b, c, i + 1, j, steps);
+    if (corner == 1) return subdivided_direction(a, b, c, i + 1, j + 1, steps);
+    return subdivided_direction(a, b, c, i, j + 1, steps);
+}
 
 float fade(float value) {
     return value * value * value * (value * (value * 6.0 - 15.0) + 10.0);
@@ -127,11 +212,11 @@ void write_vertex(uint index, vec3 position, vec3 normal, float height) {
 
 void main() {
     uint index = gl_GlobalInvocationID.x;
-    if (index >= uint(u_vertex_count)) {
+    if (index >= uint(u_draw_vertex_count)) {
         return;
     }
 
-    vec3 direction = normalize(directions[index].xyz);
+    vec3 direction = direction_for_draw_vertex(index);
     float height = sample_fbm(direction);
     vec3 position = direction * (1.0 + height);
     vec3 normal = sample_normal(direction);
