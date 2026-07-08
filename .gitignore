@@ -13,3 +13,4 @@ wheels/
 *.png
 *.mp4
 exports/
+outputs/

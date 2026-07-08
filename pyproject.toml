@@ -1,9 +1,9 @@
 [project]
-name = "perlin-in-hand"
+name = "terrain-noise-workbench-2026"
 version = "0.1.0"
-description = "Add your description here"
+description = "CPU/GPU procedural terrain and noise workbench"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "perlin>=0.0.2",
     "numpy>=1.26.0",
@@ -15,6 +15,13 @@ dependencies = [
     "imageio-ffmpeg>=0.6.0",
     "moderngl-window>=3.1.1",
     "opensimplex>=0.4.5.1",
-    "imgui>=2.0.0",
     "pygame-ce>=2.5.7",
+]
+
+[project.optional-dependencies]
+# pyimgui 2.0.0 currently fails to build on Python 3.13+ on Windows.
+# Keep ImGui-based tools as a legacy optional extra until upstream supports
+# the current Python line used by the default environment.
+imgui-legacy = [
+    "imgui>=2.0.0",
 ]

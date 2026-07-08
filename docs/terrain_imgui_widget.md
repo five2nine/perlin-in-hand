@@ -49,4 +49,4 @@ GPU 평면 제너레이터와 legacy CPU 지형 창은 `WindowConfig.aspect_rati
 
 ## 의존성
 
-`imgui>=2.0.0`을 사용한다. 현재 `pyimgui` 빌드는 Python 3.13 이상에서 실패하므로 프로젝트 실행 버전은 Python 3.12.x로 고정한다.
+`imgui>=2.0.0`을 사용한다. 현재 `pyimgui` 2.0.0 빌드는 Windows의 Python 3.13 이상에서 실패한다. 이 저장소의 기본 환경은 Python 3.14.6으로 올리되, ImGui 기반 실행 파일은 `imgui-legacy` 선택 의존성으로 분리한다. 해당 도구를 실제로 실행하려면 upstream Python 3.13+ 지원이 들어오기 전까지 Python 3.12 계열 환경을 별도로 쓰는 편이 안전하다.

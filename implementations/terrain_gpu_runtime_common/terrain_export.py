@@ -35,7 +35,7 @@ def export_terrain_npz(
         "layers": layers,
     }
     metadata = {
-        "format": "perlin-in-hand terrain npz",
+        "format": "terrain-noise-workbench-2026 terrain npz",
         "version": 2,
         "storage_model": "hybrid_recipe_and_baked_mesh",
         "generator_type": "heightfield_plane",
@@ -100,7 +100,7 @@ def export_sphere_terrain_npz(
         "layers": layers,
     }
     metadata = {
-        "format": "perlin-in-hand terrain npz",
+        "format": "terrain-noise-workbench-2026 terrain npz",
         "version": 2,
         "storage_model": "hybrid_recipe_and_baked_mesh",
         "generator_type": "sphere_terrain",

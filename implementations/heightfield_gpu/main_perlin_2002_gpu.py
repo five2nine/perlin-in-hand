@@ -36,7 +36,7 @@ with open(os.path.join(SCRIPT_DIR, "shaders", "perlin_2002.frag"), "r", encoding
 
 class PerlinNoise3DApp(mglw.WindowConfig):
     gl_version = (3, 3)
-    title = "Real-Time 3D Perlin Noise Terrain"
+    title = "Terrain Noise Workbench - Perlin Heightfield"
     window_size = (1280, 720)
     resizable = True
     vsync = True
@@ -103,7 +103,7 @@ class PerlinNoise3DApp(mglw.WindowConfig):
 
         # Print controls to console
         print("=" * 60)
-        print("Interactive 3D Perlin Noise Terrain (ModernGL)")
+        print("Terrain Noise Workbench - Perlin Heightfield (ModernGL)")
         print("-" * 60)
         print("Controls:")
         print("  Mouse Drag (LMB) : Rotate Camera")
