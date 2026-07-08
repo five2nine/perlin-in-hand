@@ -30,11 +30,26 @@
 
 `implementations` 아래에는 12개 디렉터리가 있지만, 이것을 단순 폴더 목록으로만 보면 프로젝트의 성격이 잘 드러나지 않는다. 현재 최종 화면에 가까운 ImGui 기반 실행 형태는 다음 3종이다.
 
-| 실행 형태 | 실행 파일 | 역할 |
-| --- | --- | --- |
-| GPU 평면 terrain 생성기 | `implementations/terrain_gpu_generator_plane/main_terrain_gpu_generator_plane.py` | 평면 heightfield terrain을 GPU에서 생성하고 레이어 스택을 ImGui로 조정한다. |
-| GPU 구면 terrain 생성기 | `implementations/terrain_gpu_generator_sphere/main_terrain_gpu_generator_sphere.py` | 구면 방향 벡터를 3D 노이즈에 넣어 planet-like terrain을 만들고 ImGui로 조정한다. |
-| GPU terrain export 뷰어 | `implementations/terrain_gpu_viewer/main_terrain_gpu_viewer.py` | 저장된 `.npz` terrain export를 다시 불러와 GPU 렌더링으로 확인한다. |
+**GPU 평면 terrain 생성기**
+평면 heightfield terrain을 GPU에서 생성하고 레이어 스택을 ImGui로 조정한다.
+
+```powershell
+uv run .\implementations\terrain_gpu_generator_plane\main_terrain_gpu_generator_plane.py
+```
+
+**GPU 구면 terrain 생성기**
+구면 방향 벡터를 3D 노이즈에 넣어 planet-like terrain을 만들고 ImGui로 조정한다.
+
+```powershell
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py
+```
+
+**GPU terrain export 뷰어**
+저장된 `.npz` terrain export를 다시 불러와 GPU 렌더링으로 확인한다.
+
+```powershell
+uv run .\implementations\terrain_gpu_viewer\main_terrain_gpu_viewer.py
+```
 
 나머지 실행 파일은 CPU/GPU heightfield 비교, Marching Squares/Cubes 실험, legacy 확인 도구다. 즉 이 저장소는 한 앱이 아니라 terrain/noise 처리 방식을 단계별로 남긴 실험 작업대다.
 
@@ -83,14 +98,6 @@ ImGui 기반 파일은 아래처럼 `import imgui` 또는 `moderngl_window.integ
 2026-07-09 확인 결과, 깨끗한 `Python 3.13.12`와 `Python 3.14.6` 환경에서 `imgui==2.0.0` 빌드는 C API 오류로 실패했다. 그래서 이 저장소는 `Python 3.12.12`에 머문다.
 
 ## 실행 예
-
-대표 ImGui 실행은 다음과 같다.
-
-```powershell
-uv run .\implementations\terrain_gpu_generator_plane\main_terrain_gpu_generator_plane.py
-uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py
-uv run .\implementations\terrain_gpu_viewer\main_terrain_gpu_viewer.py
-```
 
 비교용 CPU/GPU 실험 실행 예는 다음과 같다.
 
