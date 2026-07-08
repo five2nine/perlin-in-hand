@@ -2,7 +2,13 @@
 
 `terrain-noise-workbench-2026`은 Perlin, OpenSimplex, fBm 계열 노이즈를 CPU와 GPU에서 비교하며 지형처럼 다뤄 보는 Python 실험 저장소다. 단일 렌더링 앱이 아니라 heightfield, 정적 terrain export, 구면 terrain, Marching Squares/Cubes, Transform Feedback를 한 폴더 안에서 확인하는 작업대에 가깝다.
 
-![Perlin heightfield screenshot](docs/assets/terrain-noise-workbench-perlin-surface.png)
+## 대표 스크린샷
+
+![GPU 평면 terrain 생성기](docs/assets/terrain-noise-workbench-imgui-plane-generator.png)
+
+![구면 terrain 생성기](docs/assets/terrain-noise-workbench-imgui-sphere-generator.png)
+
+![GPU terrain export 뷰어](docs/assets/terrain-noise-workbench-imgui-sphere-viewer.png)
 
 이 저장소의 전신 이름은 `perlin-in-hand`였지만, 현재 내용은 Perlin 하나보다 넓다. 그래서 프로젝트 이름을 `terrain-noise-workbench-2026`으로 정리한다.
 
@@ -20,7 +26,19 @@
 
 `Python 3.13` 이상으로 올리지 않는다. 이유는 이 저장소가 `imgui==2.0.0`을 직접 사용하며, 2026-07-09에 별도 clean install로 확인한 결과 `Python 3.13.12`와 `Python 3.14.6`에서 `imgui==2.0.0` C 확장 빌드가 실패했기 때문이다. 자세한 테스트 표와 판단 근거는 [Python 3.12.12 고정과 ImGui 의존성](docs/python_imgui_compatibility.md)에 둔다.
 
-## 폴더 구조
+## 대표 실행 형태
+
+`implementations` 아래에는 12개 디렉터리가 있지만, 이것을 단순 폴더 목록으로만 보면 프로젝트의 성격이 잘 드러나지 않는다. 현재 최종 화면에 가까운 ImGui 기반 실행 형태는 다음 3종이다.
+
+| 실행 형태 | 실행 파일 | 역할 |
+| --- | --- | --- |
+| GPU 평면 terrain 생성기 | `implementations/terrain_gpu_generator_plane/main_terrain_gpu_generator_plane.py` | 평면 heightfield terrain을 GPU에서 생성하고 레이어 스택을 ImGui로 조정한다. |
+| GPU 구면 terrain 생성기 | `implementations/terrain_gpu_generator_sphere/main_terrain_gpu_generator_sphere.py` | 구면 방향 벡터를 3D 노이즈에 넣어 planet-like terrain을 만들고 ImGui로 조정한다. |
+| GPU terrain export 뷰어 | `implementations/terrain_gpu_viewer/main_terrain_gpu_viewer.py` | 저장된 `.npz` terrain export를 다시 불러와 GPU 렌더링으로 확인한다. |
+
+나머지 실행 파일은 CPU/GPU heightfield 비교, Marching Squares/Cubes 실험, legacy 확인 도구다. 즉 이 저장소는 한 앱이 아니라 terrain/noise 처리 방식을 단계별로 남긴 실험 작업대다.
+
+## 구현 폴더 구조
 
 | 경로 | 내용 |
 | --- | --- |
@@ -66,7 +84,15 @@ ImGui 기반 파일은 아래처럼 `import imgui` 또는 `moderngl_window.integ
 
 ## 실행 예
 
-먼저 확인하기 쉬운 실행 예는 다음과 같다.
+대표 ImGui 실행은 다음과 같다.
+
+```powershell
+uv run .\implementations\terrain_gpu_generator_plane\main_terrain_gpu_generator_plane.py
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py
+uv run .\implementations\terrain_gpu_viewer\main_terrain_gpu_viewer.py
+```
+
+비교용 CPU/GPU 실험 실행 예는 다음과 같다.
 
 ```powershell
 uv run .\implementations\heightfield_cpu\main_perlin_my_cpu.py
@@ -79,14 +105,6 @@ uv run .\implementations\gpu_marching_cubes\main_opensimplex_2014_gpu_4d.py
 ```
 
 GPU 실행 파일은 ModernGL이 OpenGL 컨텍스트를 만들 수 있는 로컬 그래픽 환경을 필요로 한다.
-
-ImGui 기반 terrain 도구는 다음처럼 실행한다.
-
-```powershell
-uv run .\implementations\terrain_gpu_generator_plane\main_terrain_gpu_generator_plane.py
-uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py
-uv run .\implementations\terrain_gpu_viewer\main_terrain_gpu_viewer.py
-```
 
 ## 산출물과 로컬 전용 폴더
 
