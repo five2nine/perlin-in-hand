@@ -14,3 +14,6 @@ wheels/
 *.mp4
 exports/
 outputs/
+!docs/
+!docs/assets/
+!docs/assets/*.png

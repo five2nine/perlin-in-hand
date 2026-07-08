@@ -2,6 +2,8 @@
 
 `terrain-noise-workbench-2026`은 Perlin, OpenSimplex, fBm 계열 노이즈를 CPU와 GPU에서 비교하며 지형처럼 다뤄 보는 Python 실험 저장소다. 단일 렌더링 앱이 아니라 heightfield, 정적 terrain export, 구면 terrain, Marching Squares/Cubes, Transform Feedback를 한 폴더 안에서 확인하는 작업대에 가깝다.
 
+![Perlin heightfield screenshot](docs/assets/terrain-noise-workbench-perlin-surface.png)
+
 이 저장소의 전신 이름은 `perlin-in-hand`였지만, 현재 내용은 Perlin 하나보다 넓다. 그래서 프로젝트 이름을 `terrain-noise-workbench-2026`으로 정리한다.
 
 ## 현재 정리 상태
@@ -10,14 +12,13 @@
 | --- | --- |
 | 프로젝트 이름 | `terrain-noise-workbench-2026` |
 | 기본 브랜치 | `main` |
-| 기본 Python | `3.14.6` |
+| 기본 Python | `3.12.12` |
 | 패키지 관리 | `uv` |
-| 기본 실행 범위 | `imgui`가 필요 없는 CPU/GPU 실험 |
-| 별도 확인 실행 범위 | ImGui 기반 terrain 생성기/뷰어 |
+| 실행 범위 | CPU/GPU 실험과 ImGui 기반 terrain 생성기/뷰어 |
 
-Python 최신화는 기본 환경을 `3.14.6`으로 맞추는 방식으로 적용한다. 다만 이번 정리 중 깨끗한 `uv sync`에서 `imgui==2.0.0` 빌드가 Python 3.13/3.14 계열에서 실패했다. 기존에 준비된 Python 3.13 환경에서 이미 동작하던 경우는 별도이며, 그 사실을 부정하지 않는다. 그래서 ImGui 기반 실행 파일은 기본 의존성에서 제외하고 `imgui-legacy` 선택 의존성으로 분리했다.
+이 프로젝트는 `Python 3.12.12`를 사용한 상태로 정리한다. `pyproject.toml`의 Python 범위도 `>=3.12,<3.13`으로 고정한다.
 
-정리 시점인 2026-07-09 기준 Python.org의 stable source release 목록에서 3.14 계열 최신 안정판은 `3.14.6`이다. `imgui` 호환성 문제는 이번 clean sync 실패와 PyPI의 `imgui` 배포 상태, pyimgui의 Python 3.13 빌드 오류 이슈를 기준으로 기록했다.
+`Python 3.13` 이상으로 올리지 않는다. 이유는 이 저장소가 `imgui==2.0.0`을 직접 사용하며, 2026-07-09에 별도 clean install로 확인한 결과 `Python 3.13.12`와 `Python 3.14.6`에서 `imgui==2.0.0` C 확장 빌드가 실패했기 때문이다. 자세한 테스트 표와 판단 근거는 [Python 3.12.12 고정과 ImGui 의존성](docs/python_imgui_compatibility.md)에 둔다.
 
 ## 폴더 구조
 
@@ -36,21 +37,19 @@ Python 최신화는 기본 환경을 `3.14.6`으로 맞추는 방식으로 적�
 
 ## 설치
 
-기본 환경은 최신 Python 라인인 3.14 계열을 사용한다.
+기본 환경은 `Python 3.12.12`를 사용한다.
 
 ```powershell
-uv sync --python 3.14
+uv sync --python 3.12.12
 ```
 
-정확히 이 저장소가 고정한 버전을 쓰려면 다음처럼 실행한다.
+`3.13` 이상으로 올리지 않는다. 특히 ImGui 기반 실행 파일을 유지하려면 `3.12.12` 기준으로 환경을 다시 만든다.
 
 ```powershell
-uv sync --python 3.14.6
+uv run python --version
 ```
 
-기본 환경에는 `imgui`가 설치되지 않는다. 따라서 ImGui 패널을 직접 import하는 실행 파일은 기본 환경에서 실행 대상이 아니다.
-
-## ImGui 별도 확인 범위
+## ImGui 의존성
 
 ImGui 기반 파일은 아래처럼 `import imgui` 또는 `moderngl_window.integrations.imgui`에 의존한다.
 
@@ -61,23 +60,13 @@ ImGui 기반 파일은 아래처럼 `import imgui` 또는 `moderngl_window.integ
 - `implementations/terrain_gpu_runtime_common/terrain_imgui.py`
 - `implementations/terrain_legacy_common/terrain_imgui.py`
 
-`imgui-legacy` extra는 별도 확인용으로 남겨 둔다.
+`imgui>=2.0.0`은 기본 의존성이다. 이 프로젝트에서 ImGui 도구는 부가 기능이 아니라 terrain 생성기/뷰어의 일부다. 따라서 `imgui`를 빼고 최신 Python만 맞추는 방식은 이 저장소의 기준 실행 환경으로 보지 않는다.
 
-```powershell
-uv sync --extra imgui-legacy
-```
-
-이번 정리 중에는 깨끗한 Python 3.13/3.14 환경에서 `imgui==2.0.0` C 확장 빌드가 실패했다. 반대로 기존 Python 3.13 가상환경에 이미 `imgui`가 설치되어 있고 실행까지 됐다면 그 환경은 그대로 유효한 실험 기록으로 봐야 한다. 이 저장소의 기본 정책은 최신 Python 환경을 우선 유지하고, ImGui 실행군은 별도 검증 대상으로 분리해 보관하는 것이다.
-
-참고 링크:
-
-- [Python source releases](https://www.python.org/downloads/source/)
-- [imgui on PyPI](https://pypi.org/project/imgui/)
-- [pyimgui Python 3.13 build error](https://github.com/pyimgui/pyimgui/issues/383)
+2026-07-09 확인 결과, 깨끗한 `Python 3.13.12`와 `Python 3.14.6` 환경에서 `imgui==2.0.0` 빌드는 C API 오류로 실패했다. 그래서 이 저장소는 `Python 3.12.12`에 머문다.
 
 ## 실행 예
 
-기본 환경에서 우선 확인할 수 있는 실행군은 ImGui를 직접 쓰지 않는 스크립트다.
+먼저 확인하기 쉬운 실행 예는 다음과 같다.
 
 ```powershell
 uv run .\implementations\heightfield_cpu\main_perlin_my_cpu.py
@@ -90,6 +79,14 @@ uv run .\implementations\gpu_marching_cubes\main_opensimplex_2014_gpu_4d.py
 ```
 
 GPU 실행 파일은 ModernGL이 OpenGL 컨텍스트를 만들 수 있는 로컬 그래픽 환경을 필요로 한다.
+
+ImGui 기반 terrain 도구는 다음처럼 실행한다.
+
+```powershell
+uv run .\implementations\terrain_gpu_generator_plane\main_terrain_gpu_generator_plane.py
+uv run .\implementations\terrain_gpu_generator_sphere\main_terrain_gpu_generator_sphere.py
+uv run .\implementations\terrain_gpu_viewer\main_terrain_gpu_viewer.py
+```
 
 ## 산출물과 로컬 전용 폴더
 
@@ -110,7 +107,8 @@ export `.npz` 메타데이터의 format 이름도 `terrain-noise-workbench-2026 
 - `docs/spherical_terrain_study.md`: 평면 heightfield와 구면 terrain의 차이 정리
 - `docs/transform_feedback_pipeline.md`: Transform Feedback 파이프라인과 terrain bake, Marching Squares/Cubes 비교
 - `docs/terrain_generation_options.md`: terrain 레이어 종류와 속성 설명
-- `docs/terrain_imgui_widget.md`: ImGui 패널 구현과 현재 clean sync 기준 Python 호환성 제약
+- `docs/terrain_imgui_widget.md`: ImGui 패널 구현과 Python 3.12.12 고정 이유
+- `docs/python_imgui_compatibility.md`: Python 3.12.12 고정과 ImGui clean install 테스트 결과
 - `docs/noise_complexity_comparison.md`: Perlin/Simplex 노이즈의 연산 절차 비교
 - `docs/terrain_synthesis_methods.md`: 산맥, 평야, 협곡 등으로 노이즈를 가공하는 합성 메모
 
@@ -120,9 +118,9 @@ export `.npz` 메타데이터의 format 이름도 `terrain-noise-workbench-2026 
 
 ```powershell
 uv lock --check
-uv sync --python 3.14.6
+uv sync --python 3.12.12
 uv run python -m compileall implementations
-uv run python -c "import numpy, matplotlib, moderngl, glcontext, imageio, opensimplex, pygame; print('default dependencies ok')"
+uv run python -c "import numpy, matplotlib, moderngl, glcontext, imageio, opensimplex, pygame, imgui; print('dependencies ok')"
 ```
 
-ImGui 실행군은 이번 clean sync에서 `imgui` 빌드 실패가 확인됐으므로 최신 Python 기본 검증 대상에서 제외한다. 기존에 준비된 Python 3.13 환경이 남아 있다면 그 환경에서 별도 실행 검증을 하는 편이 맞다.
+검증 기준도 `Python 3.12.12`다. `Python 3.13` 이상으로 올리는 작업은 현재 허용하지 않는다.

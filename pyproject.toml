@@ -3,7 +3,7 @@ name = "terrain-noise-workbench-2026"
 version = "0.1.0"
 description = "CPU/GPU procedural terrain and noise workbench"
 readme = "README.md"
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "perlin>=0.0.2",
     "numpy>=1.26.0",
@@ -15,14 +15,6 @@ dependencies = [
     "imageio-ffmpeg>=0.6.0",
     "moderngl-window>=3.1.1",
     "opensimplex>=0.4.5.1",
-    "pygame-ce>=2.5.7",
-]
-
-[project.optional-dependencies]
-# During the 2026-07 cleanup, clean uv sync attempts with Python 3.13/3.14
-# failed while building pyimgui 2.0.0 on Windows. Existing prepared 3.13
-# environments may still work, so keep the dependency optional instead of
-# rewriting the ImGui tools.
-imgui-legacy = [
     "imgui>=2.0.0",
+    "pygame-ce>=2.5.7",
 ]
