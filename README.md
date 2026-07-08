@@ -13,11 +13,11 @@
 | 기본 Python | `3.14.6` |
 | 패키지 관리 | `uv` |
 | 기본 실행 범위 | `imgui`가 필요 없는 CPU/GPU 실험 |
-| 레거시 실행 범위 | ImGui 기반 terrain 생성기/뷰어 |
+| 별도 확인 실행 범위 | ImGui 기반 terrain 생성기/뷰어 |
 
-Python 최신화는 기본 환경을 `3.14.6`으로 맞추는 방식으로 적용한다. 다만 `pyimgui`의 현재 배포판인 `imgui==2.0.0`은 Windows에서 Python 3.13 이상 빌드가 실패하므로, ImGui 기반 실행 파일은 기본 의존성에서 제외하고 `imgui-legacy` 선택 의존성으로 분리했다.
+Python 최신화는 기본 환경을 `3.14.6`으로 맞추는 방식으로 적용한다. 다만 이번 정리 중 깨끗한 `uv sync`에서 `imgui==2.0.0` 빌드가 Python 3.13/3.14 계열에서 실패했다. 기존에 준비된 Python 3.13 환경에서 이미 동작하던 경우는 별도이며, 그 사실을 부정하지 않는다. 그래서 ImGui 기반 실행 파일은 기본 의존성에서 제외하고 `imgui-legacy` 선택 의존성으로 분리했다.
 
-정리 시점인 2026-07-09 기준 Python.org의 stable source release 목록에서 3.14 계열 최신 안정판은 `3.14.6`이다. `imgui` 호환성 문제는 PyPI의 `imgui` 배포 상태와 pyimgui의 Python 3.13 빌드 오류 이슈를 기준으로 기록했다.
+정리 시점인 2026-07-09 기준 Python.org의 stable source release 목록에서 3.14 계열 최신 안정판은 `3.14.6`이다. `imgui` 호환성 문제는 이번 clean sync 실패와 PyPI의 `imgui` 배포 상태, pyimgui의 Python 3.13 빌드 오류 이슈를 기준으로 기록했다.
 
 ## 폴더 구조
 
@@ -50,7 +50,7 @@ uv sync --python 3.14.6
 
 기본 환경에는 `imgui`가 설치되지 않는다. 따라서 ImGui 패널을 직접 import하는 실행 파일은 기본 환경에서 실행 대상이 아니다.
 
-## ImGui 레거시 제약
+## ImGui 별도 확인 범위
 
 ImGui 기반 파일은 아래처럼 `import imgui` 또는 `moderngl_window.integrations.imgui`에 의존한다.
 
@@ -61,13 +61,13 @@ ImGui 기반 파일은 아래처럼 `import imgui` 또는 `moderngl_window.integ
 - `implementations/terrain_gpu_runtime_common/terrain_imgui.py`
 - `implementations/terrain_legacy_common/terrain_imgui.py`
 
-`imgui-legacy` extra는 기록용으로 남겨 둔다.
+`imgui-legacy` extra는 별도 확인용으로 남겨 둔다.
 
 ```powershell
 uv sync --extra imgui-legacy
 ```
 
-하지만 Windows에서 Python 3.13 이상이면 `imgui==2.0.0` C 확장 빌드가 실패한다. 이 도구들을 반드시 실행해야 한다면 upstream에서 Python 3.13+ 빌드를 지원하기 전까지 Python 3.12 계열 별도 환경을 쓰는 것이 현실적이다. 이 저장소의 기본 정책은 최신 Python 환경을 우선 유지하고, ImGui 실행군은 레거시로 분리해 보관하는 것이다.
+이번 정리 중에는 깨끗한 Python 3.13/3.14 환경에서 `imgui==2.0.0` C 확장 빌드가 실패했다. 반대로 기존 Python 3.13 가상환경에 이미 `imgui`가 설치되어 있고 실행까지 됐다면 그 환경은 그대로 유효한 실험 기록으로 봐야 한다. 이 저장소의 기본 정책은 최신 Python 환경을 우선 유지하고, ImGui 실행군은 별도 검증 대상으로 분리해 보관하는 것이다.
 
 참고 링크:
 
@@ -110,7 +110,7 @@ export `.npz` 메타데이터의 format 이름도 `terrain-noise-workbench-2026 
 - `docs/spherical_terrain_study.md`: 평면 heightfield와 구면 terrain의 차이 정리
 - `docs/transform_feedback_pipeline.md`: Transform Feedback 파이프라인과 terrain bake, Marching Squares/Cubes 비교
 - `docs/terrain_generation_options.md`: terrain 레이어 종류와 속성 설명
-- `docs/terrain_imgui_widget.md`: ImGui 패널 구현과 현재 Python 호환성 제약
+- `docs/terrain_imgui_widget.md`: ImGui 패널 구현과 현재 clean sync 기준 Python 호환성 제약
 - `docs/noise_complexity_comparison.md`: Perlin/Simplex 노이즈의 연산 절차 비교
 - `docs/terrain_synthesis_methods.md`: 산맥, 평야, 협곡 등으로 노이즈를 가공하는 합성 메모
 
@@ -125,4 +125,4 @@ uv run python -m compileall implementations
 uv run python -c "import numpy, matplotlib, moderngl, glcontext, imageio, opensimplex, pygame; print('default dependencies ok')"
 ```
 
-ImGui 실행군은 `imgui` Python 3.13+ 빌드 문제가 해결되기 전까지 최신 Python 기본 검증 대상에서 제외한다.
+ImGui 실행군은 이번 clean sync에서 `imgui` 빌드 실패가 확인됐으므로 최신 Python 기본 검증 대상에서 제외한다. 기존에 준비된 Python 3.13 환경이 남아 있다면 그 환경에서 별도 실행 검증을 하는 편이 맞다.
